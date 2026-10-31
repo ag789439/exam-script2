@@ -89,6 +89,9 @@ SECTIONS = ["A", "B", "C", "D", "E"]
 app = Flask(__name__, static_folder=None)
 app.jinja_loader = DictLoader(TEMPLATES)
 app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+from auth_system import register_auth, login_required
+
+register_auth(app)
 
 
 @app.route("/static/<path:filename>", endpoint="static")
@@ -402,6 +405,7 @@ def logout():
 #  dashboard
 # --------------------------------------------------------------------------
 @app.route("/")
+@login_required
 def dashboard():
     stats = {
         "students": query("SELECT COUNT(*) c FROM students", one=True)["c"],
