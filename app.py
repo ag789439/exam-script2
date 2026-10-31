@@ -1,10 +1,10 @@
 """
 ==========================================================================
- EXAM MANAGER  -  web edition  (Flask + SQLite)
+ EXAM MANAGER  -  web edition  (Flask + PostgreSQL)
 --------------------------------------------------------------------------
- The same examination module as the desktop app, but running in a browser
- so it can be deployed (Render / Railway / PythonAnywhere) and opened from
- any device.
+ The same examination module as before, but every record - students,
+ exams, subjects, schedule, marks AND logins - now lives in ONE
+ PostgreSQL database, the one DATABASE_URL points at.
 
  Pages
    Dashboard   counts, recent admissions, exams
@@ -14,15 +14,26 @@
    Schedule    one paper per subject with max / pass marks
    Marks       bulk marks entry per exam + subject
    Results     total, percentage, grade, rank, pass/fail + CSV export
+   My results  what a student sees after logging in
+   Accounts    /admin/students and /admin/teachers (admin only)
+
+ Logins (see auth_system.py)
+   Admin    ADMIN_USERNAME / ADMIN_PASSWORD from the environment
+   Teacher  created by an admin on /admin/teachers
+   Student  admission number + the password an admin set on
+            /admin/students
 
  Environment variables
-   APP_PASSWORD   if set, a login screen is required (strongly recommended)
-   SCHOOL_NAME    name shown in the header
-   SECRET_KEY     session signing key (set this in production)
-   DB_PATH        where the SQLite file lives (default: next to app.py)
+   DATABASE_URL    PostgreSQL connection string (Render sets this itself
+                   when the Postgres service is attached)
+   SECRET_KEY      session signing key - set it in production
+   SCHOOL_NAME     name shown in the header
+   ADMIN_USERNAME  admin login name (default: admin)
+   ADMIN_PASSWORD  admin password - set it in production
 
  Run locally
    pip install -r requirements.txt
+   export DATABASE_URL=postgresql://user:pass@localhost:5432/exampro
    python app.py            ->  http://127.0.0.1:5000
 ==========================================================================
 """
@@ -32,8 +43,8 @@ import csv
 import io
 import os
 import secrets
-import sqlite3
 import traceback
+from contextlib import contextmanager
 from datetime import datetime
 
 from flask import (Flask, Response, abort, flash, g, redirect,
@@ -41,9 +52,8 @@ from flask import (Flask, Response, abort, flash, g, redirect,
                    url_for)
 from jinja2 import DictLoader
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.environ.get("DB_PATH") or os.path.join(BASE_DIR, "exam_manager.db")
-APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
+import db as pgdb
+
 SCHOOL_NAME = os.environ.get("SCHOOL_NAME", "Examination Management System")
 
 
@@ -55,7 +65,7 @@ SCHOOL_NAME = os.environ.get("SCHOOL_NAME", "Examination Management System")
 # ==========================================================================
 TEMPLATES = {
     'base.html':
-        '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>{% block title %}Dashboard{% endblock %} · {{ school_name }}</title>\n<link rel="stylesheet" href="{{ url_for(\'static\', filename=\'style.css\') }}">\n<link rel="icon" href="{{ url_for(\'static\', filename=\'icon.png\') }}">\n</head>\n<body>\n<div class="shell">\n  <aside class="sidebar">\n    <div class="brand">\n      <div class="badge">EX</div>\n      <div class="brand-text">\n        <strong>Exam Manager</strong>\n        <span>{{ school_name }}</span>\n      </div>\n    </div>\n    <nav>\n      <a href="{{ url_for(\'dashboard\') }}" class="{{ \'active\' if request.endpoint == \'dashboard\' }}">Dashboard</a>\n      <a href="{{ url_for(\'students\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'student\') }}">Students</a>\n      <a href="{{ url_for(\'exams\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'exam\') }}">Exams</a>\n      <a href="{{ url_for(\'subjects\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'subject\') }}">Subjects</a>\n      <a href="{{ url_for(\'schedule\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'schedule\') }}">Exam schedule</a>\n      <a href="{{ url_for(\'marks\') }}" class="{{ \'active\' if request.endpoint == \'marks\' }}">Marks entry</a>\n      <a href="{{ url_for(\'results\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'results\') }}">Results</a>\n    </nav>\n    <div class="sidebar-foot">\n      {% if auth_enabled %}<a href="{{ url_for(\'logout\') }}">Log out</a>{% endif %}\n      <span>SQLite · v3.0</span>\n    </div>\n  </aside>\n\n  <main>\n    {% if no_password %}\n    <div class="banner">\n      <strong>No password set.</strong> Anyone with this link can open student\n      data. Add an environment variable <code>APP_PASSWORD</code> on your host\n      to switch on the login screen.\n    </div>\n    {% endif %}\n    {% with messages = get_flashed_messages(with_categories=true) %}\n      {% for category, message in messages %}\n        <div class="flash {{ category }}">{{ message }}</div>\n      {% endfor %}\n    {% endwith %}\n    {% block content %}{% endblock %}\n  </main>\n</div>\n</body>\n</html>\n',
+        '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>{% block title %}Dashboard{% endblock %} · {{ school_name }}</title>\n<link rel="stylesheet" href="{{ url_for(\'static\', filename=\'style.css\') }}">\n<link rel="icon" href="{{ url_for(\'static\', filename=\'icon.png\') }}">\n</head>\n<body>\n<div class="shell">\n  <aside class="sidebar">\n    <div class="brand">\n      <div class="badge">EX</div>\n      <div class="brand-text">\n        <strong>Exam Manager</strong>\n        <span>{{ school_name }}</span>\n      </div>\n    </div>\n    <nav>\n      <a href="{{ url_for(\'dashboard\') }}" class="{{ \'active\' if request.endpoint == \'dashboard\' }}">Dashboard</a>\n      <a href="{{ url_for(\'students\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'student\') }}">Students</a>\n      <a href="{{ url_for(\'exams\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'exam\') }}">Exams</a>\n      <a href="{{ url_for(\'subjects\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'subject\') }}">Subjects</a>\n      <a href="{{ url_for(\'schedule\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'schedule\') }}">Exam schedule</a>\n      {% if session.get(\'role\') == \'admin\' %}\n      <a href="/admin/students">Student passwords</a>\n      <a href="/admin/teachers">Teacher accounts</a>\n      {% endif %}\n      <a href="{{ url_for(\'marks\') }}" class="{{ \'active\' if request.endpoint == \'marks\' }}">Marks entry</a>\n      <a href="{{ url_for(\'results\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'results\') }}">Results</a>\n    </nav>\n    <div class="sidebar-foot">\n      {% if auth_enabled %}<a href="{{ url_for(\'auth.logout\') }}">Log out</a>{% endif %}\n      <span>PostgreSQL · v4.0</span>\n    </div>\n  </aside>\n\n  <main>\n    {% if no_password %}\n    <div class="banner">\n      <strong>No password set.</strong> Anyone with this link can open student\n      data. Add an environment variable <code>APP_PASSWORD</code> on your host\n      to switch on the login screen.\n    </div>\n    {% endif %}\n    {% with messages = get_flashed_messages(with_categories=true) %}\n      {% for category, message in messages %}\n        <div class="flash {{ category }}">{{ message }}</div>\n      {% endfor %}\n    {% endwith %}\n    {% block content %}{% endblock %}\n  </main>\n</div>\n</body>\n</html>\n',
     'login.html':
         '{% extends "base.html" %}\n{% block title %}Log in{% endblock %}\n{% block content %}\n<div class="login-wrap">\n  <form class="card login" method="post">\n    <h1>Log in</h1>\n    <p class="muted">{{ school_name }} · examination module</p>\n    <label>Password\n      <input type="password" name="password" autofocus required>\n    </label>\n    <button class="btn primary" type="submit">Open dashboard</button>\n  </form>\n</div>\n{% endblock %}\n',
     'dashboard.html':
@@ -195,108 +205,79 @@ def exam_label(row):
 
 
 # --------------------------------------------------------------------------
-#  database
+#  database  (PostgreSQL - the single source of truth)
 # --------------------------------------------------------------------------
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS students (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    admission_no   TEXT NOT NULL UNIQUE,
-    roll_no        TEXT NOT NULL,
-    name           TEXT NOT NULL,
-    class_name     TEXT NOT NULL,
-    section        TEXT,
-    dob            TEXT,
-    gender         TEXT,
-    father_name    TEXT,
-    mother_name    TEXT,
-    phone          TEXT,
-    email          TEXT,
-    address        TEXT,
-    admission_date TEXT,
-    status         TEXT DEFAULT 'Active',
-    created_at     TEXT DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS exams (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    exam_name     TEXT NOT NULL,
-    exam_type     TEXT,
-    academic_year TEXT,
-    class_name    TEXT,
-    start_date    TEXT,
-    end_date      TEXT,
-    status        TEXT DEFAULT 'Scheduled',
-    remarks       TEXT,
-    created_at    TEXT DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS subjects (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    subject_code TEXT NOT NULL UNIQUE,
-    subject_name TEXT NOT NULL,
-    class_name   TEXT,
-    created_at   TEXT DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS exam_schedule (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    exam_id     INTEGER NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
-    subject_id  INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-    exam_date   TEXT,
-    start_time  TEXT,
-    duration    INTEGER,
-    room        TEXT,
-    invigilator TEXT,
-    max_marks   REAL DEFAULT 100,
-    pass_marks  REAL DEFAULT 33,
-    UNIQUE(exam_id, subject_id)
-);
-CREATE TABLE IF NOT EXISTS marks (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    exam_id        INTEGER NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
-    student_id     INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-    subject_id     INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-    marks_obtained REAL,
-    remarks        TEXT,
-    updated_at     TEXT DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(exam_id, student_id, subject_id)
-);
-"""
-
-
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.executescript(SCHEMA)
-    conn.commit()
-    conn.close()
+#  Roll numbers are TEXT ("12", "A-4", "3B"), so sorting them needs care.
+#  This expression sorts by the leading number first, then alphabetically,
+#  and never fails on a roll number that has no digits at all.
+ROLL_ORDER = ("NULLIF(substring(roll_no from '^[0-9]+'), '')::int"
+              " NULLS LAST, roll_no")
 
 
 def get_db():
+    """One connection per request, shared by every query in that request."""
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA foreign_keys = ON")
+        g.db = pgdb.connect()
     return g.db
 
 
 @app.teardown_appcontext
 def close_db(_exc):
-    db = g.pop("db", None)
-    if db is not None:
-        db.close()
+    conn = g.pop("db", None)
+    if conn is None:
+        return
+    try:
+        if _exc is not None:
+            conn.rollback()
+    except Exception:                       # noqa: BLE001 - closing anyway
+        pass
+    finally:
+        conn.close()
 
 
 def query(sql, params=(), one=False):
-    cur = get_db().execute(sql, params)
-    rows = cur.fetchall()
-    cur.close()
+    """SELECT - returns a list of dict rows (or one dict / None)."""
+    with get_db().cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
     return (rows[0] if rows else None) if one else rows
 
 
 def execute(sql, params=()):
-    db = get_db()
-    cur = db.execute(sql, params)
-    db.commit()
-    last = cur.lastrowid
-    cur.close()
-    return last
+    """INSERT / UPDATE / DELETE - commits and returns the new id if any."""
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        new_id = cur.fetchone()["id"] if cur.description is not None else None
+    conn.commit()
+    return new_id
+
+
+@contextmanager
+def transaction():
+    """Several statements that must all succeed or none of them."""
+    conn = get_db()
+    try:
+        yield conn
+    except Exception:
+        conn.rollback()
+        raise
+    conn.commit()
+
+
+def init_db():
+    """Prepare the PostgreSQL schema. Safe to run on every start.
+
+    Nothing is dropped, nothing is recreated: existing tables and rows are
+    left exactly as they are, and only missing tables / columns / indexes
+    are added.
+    """
+    try:
+        pgdb.ensure_schema()
+        return True, None
+    except Exception as exc:                # noqa: BLE001 - never crash boot
+        app.logger.error("Could not prepare the PostgreSQL schema: %s", exc)
+        return False, str(exc)
 
 
 # --------------------------------------------------------------------------
@@ -304,16 +285,16 @@ def execute(sql, params=()):
 # --------------------------------------------------------------------------
 def compute_results(exam_id, class_name):
     schedule = query("SELECT subject_id, max_marks, pass_marks FROM exam_schedule"
-                     " WHERE exam_id=?", (exam_id,))
+                     " WHERE exam_id=%s", (exam_id,))
     if not schedule:
         return []
     max_by_sub = {r["subject_id"]: (r["max_marks"] or 0) for r in schedule}
     pass_by_sub = {r["subject_id"]: (r["pass_marks"] or 0) for r in schedule}
 
     students = query(
-        "SELECT id, admission_no, roll_no, name FROM students WHERE class_name=?"
-        " ORDER BY CAST(roll_no AS INTEGER), roll_no", (class_name,))
-    marks = query("SELECT * FROM marks WHERE exam_id=?", (exam_id,))
+        "SELECT id, admission_no, roll_no, name FROM students"
+        " WHERE class_name=%s ORDER BY " + ROLL_ORDER, (class_name,))
+    marks = query("SELECT * FROM marks WHERE exam_id=%s", (exam_id,))
     by_student = {}
     for m in marks:
         by_student.setdefault(m["student_id"], {})[m["subject_id"]] = m
@@ -362,43 +343,39 @@ def compute_results(exam_id, class_name):
 # --------------------------------------------------------------------------
 #  auth + shared template values
 # --------------------------------------------------------------------------
+#  Pages a logged-in student is allowed to open. Everything else belongs to
+#  the staff area, so a student is sent back to their own result page.
+STUDENT_ALLOWED = {"student_portal", "static", "healthz",
+                   "auth.logout", "auth.login"}
+
+
 @app.before_request
 def require_login():
-    if not APP_PASSWORD:
+    # Keeps the schema present even if the database was briefly unreachable
+    # when the process started (ensure_schema() is a no-op once it has run).
+    if request.endpoint != "static":
+        try:
+            pgdb.ensure_schema()
+        except Exception:                   # noqa: BLE001 - reported elsewhere
+            pass
+
+    if request.endpoint in ("auth.login", "static", "healthz"):
         return None
-    if request.endpoint in ("login", "static", "healthz"):
-        return None
-    if session.get("auth"):
-        return None
-    return redirect(url_for("login", next=request.path))
+    if not (session.get("user_id") or session.get("auth")):
+        return redirect(url_for("auth.login", next=request.path))
+    if session.get("role") == "student" and request.endpoint not in STUDENT_ALLOWED:
+        return redirect(url_for("student_portal"))
+    return None
 
 
 @app.context_processor
 def inject_globals():
     return {
         "school_name": SCHOOL_NAME,
-        "auth_enabled": bool(APP_PASSWORD),
-        "no_password": not APP_PASSWORD,
+        "auth_enabled": True,
+        "no_password": False,
         "today": datetime.now().strftime("%d/%m/%Y"),
     }
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if not APP_PASSWORD:
-        return redirect(url_for("dashboard"))
-    if request.method == "POST":
-        if request.form.get("password", "") == APP_PASSWORD:
-            session["auth"] = True
-            return redirect(request.args.get("next") or url_for("dashboard"))
-        flash("Wrong password.", "error")
-    return render_template("login.html")
-
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
 
 
 # --------------------------------------------------------------------------
@@ -408,10 +385,10 @@ def logout():
 @login_required
 def dashboard():
     stats = {
-        "students": query("SELECT COUNT(*) c FROM students", one=True)["c"],
-        "exams": query("SELECT COUNT(*) c FROM exams", one=True)["c"],
-        "subjects": query("SELECT COUNT(*) c FROM subjects", one=True)["c"],
-        "papers": query("SELECT COUNT(*) c FROM exam_schedule", one=True)["c"],
+        "students": query("SELECT COUNT(*) AS c FROM students", one=True)["c"],
+        "exams": query("SELECT COUNT(*) AS c FROM exams", one=True)["c"],
+        "subjects": query("SELECT COUNT(*) AS c FROM subjects", one=True)["c"],
+        "papers": query("SELECT COUNT(*) AS c FROM exam_schedule", one=True)["c"],
     }
     recent = query("SELECT * FROM students ORDER BY id DESC LIMIT 10")
     exams = query("SELECT * FROM exams ORDER BY id DESC LIMIT 10")
@@ -428,18 +405,17 @@ def students():
     if term:
         like = f"%{term}%"
         rows = query(
-            "SELECT * FROM students WHERE name LIKE ? OR roll_no LIKE ?"
-            " OR admission_no LIKE ? OR class_name LIKE ?"
-            " ORDER BY class_name, CAST(roll_no AS INTEGER), roll_no",
+            "SELECT * FROM students WHERE name ILIKE %s OR roll_no ILIKE %s"
+            " OR admission_no ILIKE %s OR class_name ILIKE %s"
+            " ORDER BY class_name, " + ROLL_ORDER,
             (like, like, like, like))
     else:
-        rows = query("SELECT * FROM students ORDER BY class_name,"
-                     " CAST(roll_no AS INTEGER), roll_no")
+        rows = query("SELECT * FROM students ORDER BY class_name, " + ROLL_ORDER)
     classes = [r["class_name"] for r in query(
         "SELECT DISTINCT class_name FROM students WHERE class_name<>''"
         " ORDER BY class_name")]
     edit_id = request.args.get("edit", type=int)
-    editing = query("SELECT * FROM students WHERE id=?", (edit_id,),
+    editing = query("SELECT * FROM students WHERE id=%s", (edit_id,),
                     one=True) if edit_id else None
     return render_template("students.html", students=rows, q=term,
                            classes=classes, disp_date=disp_date,
@@ -481,39 +457,40 @@ def student_save():
         flash("Email does not look valid.", "error")
         return redirect(url_for("students"))
 
-    dup = query("SELECT id FROM students WHERE admission_no=? AND id<>?",
+    dup = query("SELECT id FROM students WHERE admission_no=%s AND id<>%s",
                 (adm, int(sid) if sid else 0), one=True)
     if dup:
         flash(f"Admission No {adm} already exists.", "error")
         return redirect(url_for("students"))
 
     if sid:
-        execute("""UPDATE students SET admission_no=?, roll_no=?, name=?,
-                   class_name=?, section=?, dob=?, gender=?, father_name=?,
-                   mother_name=?, phone=?, email=?, address=?, admission_date=?,
-                   status=? WHERE id=?""", values + (int(sid),))
+        execute("""UPDATE students SET admission_no=%s, roll_no=%s, name=%s,
+                   class_name=%s, section=%s, dob=%s, gender=%s, father_name=%s,
+                   mother_name=%s, phone=%s, email=%s, address=%s,
+                   admission_date=%s, status=%s WHERE id=%s""",
+                values + (int(sid),))
         flash(f"Student '{name}' updated.", "ok")
     else:
         execute("""INSERT INTO students (admission_no, roll_no, name, class_name,
                    section, dob, gender, father_name, mother_name, phone, email,
                    address, admission_date, status)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", values)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                   RETURNING id""", values)
         flash(f"Student '{name}' added.", "ok")
     return redirect(url_for("students"))
 
 
 @app.route("/students/<int:sid>/delete", methods=["POST"])
 def student_delete(sid):
-    row = query("SELECT name FROM students WHERE id=?", (sid,), one=True)
-    execute("DELETE FROM students WHERE id=?", (sid,))
+    row = query("SELECT name FROM students WHERE id=%s", (sid,), one=True)
+    execute("DELETE FROM students WHERE id=%s", (sid,))
     flash(f"Student '{row['name'] if row else sid}' deleted.", "ok")
     return redirect(url_for("students"))
 
 
 @app.route("/students.csv")
 def students_csv():
-    rows = query("SELECT * FROM students ORDER BY class_name,"
-                 " CAST(roll_no AS INTEGER), roll_no")
+    rows = query("SELECT * FROM students ORDER BY class_name, " + ROLL_ORDER)
     out = io.StringIO()
     w = csv.writer(out)
     w.writerow(["Admission No", "Roll No", "Name", "Class", "Section",
@@ -537,7 +514,7 @@ def students_csv():
 def exams():
     rows = query("SELECT * FROM exams ORDER BY id DESC")
     edit_id = request.args.get("edit", type=int)
-    editing = query("SELECT * FROM exams WHERE id=?", (edit_id,),
+    editing = query("SELECT * FROM exams WHERE id=%s", (edit_id,),
                     one=True) if edit_id else None
     return render_template("exams.html", exams=rows, disp_date=disp_date,
                            exam_types=EXAM_TYPES, statuses=EXAM_STATUS,
@@ -563,9 +540,10 @@ def exam_save():
     if sd and ed and ed < sd:
         flash("End date cannot be before start date.", "error")
         return redirect(url_for("exams"))
-    dup = query("""SELECT id FROM exams WHERE exam_type=?
-                   AND IFNULL(academic_year,'')=? AND IFNULL(class_name,'')=?
-                   AND id<>?""", (etype, year, cls, int(eid) if eid else 0),
+    dup = query("""SELECT id FROM exams WHERE exam_type=%s
+                   AND COALESCE(academic_year,'')=%s
+                   AND COALESCE(class_name,'')=%s
+                   AND id<>%s""", (etype, year, cls, int(eid) if eid else 0),
                 one=True)
     if dup:
         flash(f"'{etype}' already exists for class {cls or '-'} "
@@ -573,9 +551,9 @@ def exam_save():
         return redirect(url_for("exams"))
 
     if eid:
-        execute("""UPDATE exams SET exam_name=?, exam_type=?, academic_year=?,
-                   class_name=?, start_date=?, end_date=?, status=?, remarks=?
-                   WHERE id=?""",
+        execute("""UPDATE exams SET exam_name=%s, exam_type=%s,
+                   academic_year=%s, class_name=%s, start_date=%s, end_date=%s,
+                   status=%s, remarks=%s WHERE id=%s""",
                 (etype, etype, year, cls, sd, ed,
                  f.get("status") or "Scheduled", f.get("remarks", "").strip(),
                  int(eid)))
@@ -583,7 +561,7 @@ def exam_save():
     else:
         execute("""INSERT INTO exams (exam_name, exam_type, academic_year,
                    class_name, start_date, end_date, status, remarks)
-                   VALUES (?,?,?,?,?,?,?,?)""",
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                 (etype, etype, year, cls, sd, ed,
                  f.get("status") or "Scheduled", f.get("remarks", "").strip()))
         flash(f"Exam '{etype}' saved.", "ok")
@@ -592,8 +570,8 @@ def exam_save():
 
 @app.route("/exams/<int:eid>/delete", methods=["POST"])
 def exam_delete(eid):
-    row = query("SELECT exam_type FROM exams WHERE id=?", (eid,), one=True)
-    execute("DELETE FROM exams WHERE id=?", (eid,))
+    row = query("SELECT exam_type FROM exams WHERE id=%s", (eid,), one=True)
+    execute("DELETE FROM exams WHERE id=%s", (eid,))
     flash(f"Exam '{row['exam_type'] if row else eid}' deleted.", "ok")
     return redirect(url_for("exams"))
 
@@ -605,7 +583,7 @@ def exam_delete(eid):
 def subjects():
     rows = query("SELECT * FROM subjects ORDER BY subject_code")
     edit_id = request.args.get("edit", type=int)
-    editing = query("SELECT * FROM subjects WHERE id=?", (edit_id,),
+    editing = query("SELECT * FROM subjects WHERE id=%s", (edit_id,),
                     one=True) if edit_id else None
     return render_template("subjects.html", subjects=rows, editing=editing)
 
@@ -620,26 +598,26 @@ def subject_save():
     if not code or not name:
         flash("Subject code and name are both required.", "error")
         return redirect(url_for("subjects"))
-    dup = query("SELECT id FROM subjects WHERE subject_code=? AND id<>?",
+    dup = query("SELECT id FROM subjects WHERE subject_code=%s AND id<>%s",
                 (code, int(sid) if sid else 0), one=True)
     if dup:
         flash(f"Subject code {code} already exists.", "error")
         return redirect(url_for("subjects"))
     if sid:
-        execute("UPDATE subjects SET subject_code=?, subject_name=?,"
-                " class_name=? WHERE id=?", (code, name, cls, int(sid)))
+        execute("UPDATE subjects SET subject_code=%s, subject_name=%s,"
+                " class_name=%s WHERE id=%s", (code, name, cls, int(sid)))
         flash(f"Subject '{name}' updated.", "ok")
     else:
         execute("INSERT INTO subjects (subject_code, subject_name, class_name)"
-                " VALUES (?,?,?)", (code, name, cls))
+                " VALUES (%s,%s,%s) RETURNING id", (code, name, cls))
         flash(f"Subject '{name}' added.", "ok")
     return redirect(url_for("subjects"))
 
 
 @app.route("/subjects/<int:sid>/delete", methods=["POST"])
 def subject_delete(sid):
-    row = query("SELECT subject_name FROM subjects WHERE id=?", (sid,), one=True)
-    execute("DELETE FROM subjects WHERE id=?", (sid,))
+    row = query("SELECT subject_name FROM subjects WHERE id=%s", (sid,), one=True)
+    execute("DELETE FROM subjects WHERE id=%s", (sid,))
     flash(f"Subject '{row['subject_name'] if row else sid}' deleted.", "ok")
     return redirect(url_for("subjects"))
 
@@ -651,10 +629,10 @@ def subject_defaults():
                 ("CS", "Computer Science")]
     added = 0
     for code, name in defaults:
-        if not query("SELECT id FROM subjects WHERE subject_code=?", (code,),
+        if not query("SELECT id FROM subjects WHERE subject_code=%s", (code,),
                      one=True):
             execute("INSERT INTO subjects (subject_code, subject_name)"
-                    " VALUES (?,?)", (code, name))
+                    " VALUES (%s,%s) RETURNING id", (code, name))
             added += 1
     flash(f"{added} default subject(s) added.", "ok")
     return redirect(url_for("subjects"))
@@ -708,14 +686,14 @@ def schedule_save():
     if ps < 0 or ps > mx:
         flash("Pass marks must be between 0 and max marks.", "error")
         return redirect(url_for("schedule"))
-    if query("SELECT id FROM exam_schedule WHERE exam_id=? AND subject_id=?",
+    if query("SELECT id FROM exam_schedule WHERE exam_id=%s AND subject_id=%s",
              (exam_id, subject_id), one=True):
         flash("That subject is already scheduled for this exam.", "error")
         return redirect(url_for("schedule"))
 
     execute("""INSERT INTO exam_schedule (exam_id, subject_id, exam_date,
                start_time, duration, room, invigilator, max_marks, pass_marks)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
             (exam_id, subject_id, ed, st, int(duration),
              f.get("room", "").strip(), f.get("invigilator", "").strip(),
              mx, ps))
@@ -725,7 +703,7 @@ def schedule_save():
 
 @app.route("/schedule/<int:pid>/delete", methods=["POST"])
 def schedule_delete(pid):
-    execute("DELETE FROM exam_schedule WHERE id=?", (pid,))
+    execute("DELETE FROM exam_schedule WHERE id=%s", (pid,))
     flash("Paper removed.", "ok")
     return redirect(url_for("schedule"))
 
@@ -743,36 +721,45 @@ def marks():
     sheet, info, ctx = [], "", None
     if exam_id and subject_id:
         exam_id, subject_id = int(exam_id), int(subject_id)
-        sched = query("SELECT * FROM exam_schedule WHERE exam_id=? AND"
-                      " subject_id=?", (exam_id, subject_id), one=True)
-        exam = query("SELECT * FROM exams WHERE id=?", (exam_id,), one=True)
+        sched = query("SELECT * FROM exam_schedule WHERE exam_id=%s AND"
+                      " subject_id=%s", (exam_id, subject_id), one=True)
+        exam = query("SELECT * FROM exams WHERE id=%s", (exam_id,), one=True)
 
         if request.method == "POST" and sched:
             saved = 0
             max_marks = float(sched["max_marks"] or 100)
-            for st in query("SELECT id FROM students WHERE class_name=?",
-                            ((exam["class_name"] or "").strip(),)):
-                raw = request.form.get(f"marks_{st['id']}", "").strip()
-                remark = request.form.get(f"remarks_{st['id']}", "").strip()
-                if raw == "":
-                    value = None
-                else:
-                    value = to_float(raw)
-                    if value is None or value < 0 or value > max_marks:
-                        continue
-                existing = query("SELECT id FROM marks WHERE exam_id=? AND"
-                                 " student_id=? AND subject_id=?",
-                                 (exam_id, st["id"], subject_id), one=True)
-                if existing:
-                    execute("UPDATE marks SET marks_obtained=?, remarks=?,"
-                            " updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                            (value, remark, existing["id"]))
-                else:
-                    execute("""INSERT INTO marks (exam_id, student_id,
-                               subject_id, marks_obtained, remarks)
-                               VALUES (?,?,?,?,?)""",
-                            (exam_id, st["id"], subject_id, value, remark))
-                saved += 1
+            class_name = (exam["class_name"] or "").strip()
+            students_rows = query(
+                "SELECT id FROM students WHERE class_name=%s", (class_name,))
+            existing = {
+                m["student_id"]: m["id"] for m in query(
+                    "SELECT id, student_id FROM marks WHERE exam_id=%s"
+                    " AND subject_id=%s", (exam_id, subject_id))
+            }
+            # One transaction for the whole class: fast, and all-or-nothing.
+            with transaction() as conn:
+                with conn.cursor() as cur:
+                    for st in students_rows:
+                        raw = request.form.get(f"marks_{st['id']}", "").strip()
+                        remark = request.form.get(f"remarks_{st['id']}", "").strip()
+                        if raw == "":
+                            value = None
+                        else:
+                            value = to_float(raw)
+                            if value is None or value < 0 or value > max_marks:
+                                continue
+                        if st["id"] in existing:
+                            cur.execute(
+                                "UPDATE marks SET marks_obtained=%s, remarks=%s,"
+                                " updated_at=CURRENT_TIMESTAMP WHERE id=%s",
+                                (value, remark, existing[st["id"]]))
+                        else:
+                            cur.execute(
+                                "INSERT INTO marks (exam_id, student_id,"
+                                " subject_id, marks_obtained, remarks)"
+                                " VALUES (%s,%s,%s,%s,%s)",
+                                (exam_id, st["id"], subject_id, value, remark))
+                        saved += 1
             flash(f"Marks saved for {saved} student(s).", "ok")
             return redirect(url_for("marks", exam_id=exam_id,
                                     subject_id=subject_id))
@@ -785,13 +772,16 @@ def marks():
             pass_marks = float(sched["pass_marks"] or 33)
             ctx = {"max_marks": max_marks, "pass_marks": pass_marks}
             rows = query("SELECT * FROM students WHERE status='Active'"
-                         " AND class_name=? ORDER BY CAST(roll_no AS INTEGER),"
-                         " roll_no", ((exam["class_name"] or "").strip(),))
+                         " AND class_name=%s ORDER BY " + ROLL_ORDER,
+                         ((exam["class_name"] or "").strip(),))
+            saved_marks = {
+                m["student_id"]: m for m in query(
+                    "SELECT * FROM marks WHERE exam_id=%s AND subject_id=%s",
+                    (exam_id, subject_id))
+            }
             for st in rows:
-                m = query("SELECT * FROM marks WHERE exam_id=? AND student_id=?"
-                          " AND subject_id=?", (exam_id, st["id"], subject_id),
-                          one=True)
-                sheet.append({"student": st, "mark": m})
+                sheet.append({"student": st,
+                              "mark": saved_marks.get(st["id"])})
             info = (f"{len(sheet)} student(s) · max {fmt_num(max_marks)} · "
                     f"pass {fmt_num(pass_marks)}")
 
@@ -813,7 +803,7 @@ def results():
     rows, info, exam = [], "", None
 
     if exam_id:
-        exam = query("SELECT * FROM exams WHERE id=?", (int(exam_id),), one=True)
+        exam = query("SELECT * FROM exams WHERE id=%s", (int(exam_id),), one=True)
         class_name = class_name or (exam["class_name"] or "").strip()
         if class_name:
             rows = compute_results(int(exam_id), class_name)
@@ -841,7 +831,7 @@ def results_csv():
     if not exam_id:
         flash("Pick an exam first.", "error")
         return redirect(url_for("results"))
-    exam = query("SELECT * FROM exams WHERE id=?", (exam_id,), one=True)
+    exam = query("SELECT * FROM exams WHERE id=%s", (exam_id,), one=True)
     class_name = class_name or (exam["class_name"] or "").strip()
     rows = compute_results(exam_id, class_name)
     out = io.StringIO()
@@ -857,6 +847,150 @@ def results_csv():
     return Response("\ufeff" + out.getvalue(), mimetype="text/csv",
                     headers={"Content-Disposition":
                              f"attachment; filename={name}"})
+
+
+# --------------------------------------------------------------------------
+#  the student's own page
+# --------------------------------------------------------------------------
+STUDENT_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My results · {{ school_name }}</title>
+<style>{{ css|safe }}</style></head>
+<body><main>
+<header class="page-head">
+  <div>
+    <h1>{{ me.name }}</h1>
+    <p>Admission No {{ me.admission_no }} · Roll {{ me.roll_no }} ·
+       Class {{ me.class_name }}{% if me.section %} · Section {{ me.section }}{% endif %}</p>
+  </div>
+  <div class="actions">
+    <a class="btn ghost" href="{{ url_for('auth.logout') }}">Log out</a>
+  </div>
+</header>
+
+{% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
+
+{% if not exams %}
+<section class="card"><p class="muted">No marks have been entered for you
+   yet. Please check again later.</p></section>
+{% endif %}
+
+{% for e in exams %}
+<section class="card">
+  <div class="card-head">
+    <h2>{{ e.label }}</h2>
+    <span class="pill">{% if e.percentage is number %}{{ e.percentage }}% · {% endif %}{{ e.grade }} · {{ e.result }}</span>
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>Subject</th><th>Code</th><th class="num">Max</th>
+                 <th class="num">Pass</th><th class="num">Obtained</th>
+                 <th>Status</th></tr></thead>
+      <tbody>
+      {% for p in e.papers %}
+        <tr>
+          <td>{{ p.subject_name }}</td>
+          <td>{{ p.subject_code }}</td>
+          <td class="num">{{ fmt_num(p.max_marks) }}</td>
+          <td class="num">{{ fmt_num(p.pass_marks) }}</td>
+          <td class="num">{{ fmt_num(p.marks_obtained) }}</td>
+          <td>{% if p.marks_obtained is none %}<span class="muted">not entered</span>
+              {% elif p.marks_obtained|float >= p.pass_marks|float %}Pass
+              {% else %}<strong>Fail</strong>{% endif %}</td>
+        </tr>
+      {% endfor %}
+        <tr>
+          <td colspan="4"><strong>Total</strong></td>
+          <td class="num"><strong>{{ fmt_num(e.obtained) }} / {{ fmt_num(e.total_max) }}</strong></td>
+          <td><strong>{{ e.result }}</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endfor %}
+
+<section class="card">
+  <div class="card-head"><h2>My details</h2></div>
+  <p class="muted">
+    Date of birth: {{ disp_date(me.dob) or '-' }} &nbsp;·&nbsp;
+    Gender: {{ me.gender or '-' }} &nbsp;·&nbsp;
+    Father's name: {{ me.father_name or '-' }} &nbsp;·&nbsp;
+    Mother's name: {{ me.mother_name or '-' }} &nbsp;·&nbsp;
+    Phone: {{ me.phone or '-' }} &nbsp;·&nbsp;
+    Email: {{ me.email or '-' }} &nbsp;·&nbsp;
+    Admitted on: {{ disp_date(me.admission_date) or '-' }}
+  </p>
+  <p class="muted small">Wrong details or a forgotten password? Ask the school
+     office / admin.</p>
+</section>
+</main></body></html>"""
+
+
+@app.route("/student")
+def student_portal():
+    if session.get("role") != "student":
+        return redirect(url_for("dashboard"))
+    sid = session.get("user_id")
+    me = query("SELECT * FROM students WHERE id=%s", (sid,), one=True)
+    if me is None:
+        session.clear()
+        flash("Your student record could not be found. Please ask the admin.",
+              "error")
+        return redirect(url_for("auth.login"))
+
+    rows = query("""SELECT m.exam_id, m.subject_id, m.marks_obtained,
+                           e.exam_type, e.exam_name, e.academic_year,
+                           e.class_name, s.subject_name, s.subject_code,
+                           COALESCE(sc.max_marks, 100) AS max_marks,
+                           COALESCE(sc.pass_marks, 33) AS pass_marks
+                    FROM marks m
+                    JOIN exams e    ON e.id = m.exam_id
+                    JOIN subjects s ON s.id = m.subject_id
+                    LEFT JOIN exam_schedule sc
+                           ON sc.exam_id = m.exam_id
+                          AND sc.subject_id = m.subject_id
+                    WHERE m.student_id = %s
+                    ORDER BY e.id DESC, s.subject_code""", (sid,))
+
+    grouped = {}
+    order = []
+    for r in rows:
+        if r["exam_id"] not in grouped:
+            grouped[r["exam_id"]] = []
+            order.append(r["exam_id"])
+        grouped[r["exam_id"]].append(r)
+
+    exams = []
+    for exam_id in order:
+        papers = grouped[exam_id]
+        obtained = total = 0.0
+        failed = 0
+        for p in papers:
+            if p["marks_obtained"] is None:
+                continue
+            got = float(p["marks_obtained"])
+            obtained += got
+            total += float(p["max_marks"] or 0)
+            if got < float(p["pass_marks"] or 0):
+                failed += 1
+        pct = round(obtained / total * 100, 2) if total > 0 else None
+        head = papers[0]
+        exams.append({
+            "label": exam_label(head),
+            "papers": papers,
+            "obtained": round(obtained, 2),
+            "total_max": round(total, 2),
+            "percentage": pct if pct is not None else "-",
+            "grade": grade_for(pct),
+            "result": ("Pass" if (failed == 0 and pct is not None and pct >= 33)
+                       else "Fail") if pct is not None else "-",
+        })
+
+    return render_template_string(
+        STUDENT_PAGE, me=me, exams=exams, css=STYLE_CSS,
+        disp_date=disp_date, fmt_num=fmt_num)
 
 
 # --------------------------------------------------------------------------
@@ -915,20 +1049,35 @@ def diagnostics():
     checks.append(("built-in stylesheet", bool(STYLE_CSS),
                    f"{len(STYLE_CSS)} bytes"))
 
-    db_ok, db_detail = True, DB_PATH
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.execute("CREATE TABLE IF NOT EXISTS _probe (x INTEGER)")
-        conn.execute("DROP TABLE _probe")
-        conn.commit()
-        conn.close()
-    except Exception as exc:            # noqa: BLE001 - report anything
-        db_ok, db_detail = False, f"{DB_PATH} - {exc}"
-    checks.append(("database writable", db_ok, db_detail))
+        info = pgdb.connection_info()
+        checks.append(("DATABASE_URL set", True,
+                       f"{info['host']}:{info['port']} / {info['database']}"))
+    except Exception as exc:                # noqa: BLE001 - report anything
+        checks.append(("DATABASE_URL set", False, str(exc)))
+        checks.append(("PostgreSQL tables", False, "no database to check"))
+        return checks
 
-    checks.append(("login password set", bool(APP_PASSWORD),
-                   "yes" if APP_PASSWORD else
-                   "no - anyone with the link can open the data"))
+    try:
+        counts = pgdb.table_counts()
+        missing_tables = [t for t, c in counts.items() if c is None]
+        detail = ", ".join(
+            f"{t}={'MISSING' if c is None else c}" for t, c in counts.items())
+        checks.append(("PostgreSQL tables and row counts",
+                       not missing_tables, detail))
+    except Exception as exc:                # noqa: BLE001
+        checks.append(("PostgreSQL reachable", False, str(exc)))
+
+    try:
+        with pgdb.connect() as conn:
+            conn.execute("SELECT 1")
+        checks.append(("PostgreSQL accepts connections", True, "SELECT 1 OK"))
+    except Exception as exc:                # noqa: BLE001
+        checks.append(("PostgreSQL accepts connections", False, str(exc)))
+
+    checks.append(("SECRET_KEY set", bool(os.environ.get("SECRET_KEY")),
+                   "yes" if os.environ.get("SECRET_KEY") else
+                   "no - everyone is logged out after each restart"))
     return checks
 
 
@@ -941,7 +1090,7 @@ def handle_error(exc):
     tb = traceback.format_exc()
     try:
         app.logger.error("Unhandled error: %s\n%s", exc, tb)
-    except Exception:                   # noqa: BLE001
+    except Exception:                       # noqa: BLE001
         pass
     return render_template_string(
         ERROR_PAGE, error=f"{type(exc).__name__}: {exc}",
