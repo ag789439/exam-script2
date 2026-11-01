@@ -1598,6 +1598,16 @@ def seed_demo():
                    posted_by) VALUES (?,?,?,?,?)""",
                 (title, body, "all", pinned, uid()))
 
+    # ---- three student logins so the portal can be tried immediately ----
+    for sid, username in zip(ids[:3], ("aarav", "diya", "kabir")):
+        if not query("SELECT id FROM users WHERE username=?", (username,),
+                     one=True):
+            execute("""INSERT INTO users (username, full_name, password_hash,
+                       role, student_id) VALUES (?,?,?,?,?)""",
+                    (username, query("SELECT name FROM students WHERE id=?",
+                                     (sid,), one=True)["name"],
+                     generate_password_hash("student1234"), "student", sid))
+
     # ---- two teachers, one of them the class teacher of 8-A ----
     for username, full, cls, sec in (("teacher1", "Rakesh Kr. Singh", "8", "A"),
                                      ("teacher2", "Ranjana Sharma", "8", "B")):
@@ -1610,8 +1620,9 @@ def seed_demo():
 
     return (f"Demo school created: 10 students of class 8-A with parents, "
             f"{made} attendance rows, one exam with marks, 4 homework entries, "
-            f"3 circulars and 2 teacher accounts (teacher1 / teacher2, "
-            f"password school1234).")
+            f"3 circulars, 2 teacher accounts (teacher1 / teacher2, password "
+            f"school1234) and 3 student logins (aarav / diya / kabir, "
+            f"password student1234).")
 
 # --------------------------------------------------------------------------
 #  a student's own result
