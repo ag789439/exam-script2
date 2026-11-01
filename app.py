@@ -502,7 +502,7 @@ def logout():
 @app.route("/")
 def welcome():
     """Public, indexable landing page. The application lives behind /login."""
-    return render_template("welcome.html")
+    return redirect(url_for("login"))
 
 
 @app.route("/dashboard")
