@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+exam_module.db
+*.db
+*.db-journal
+.venv/
+venv/
+*.log
+*.csv

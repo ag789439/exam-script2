@@ -1,0 +1,67 @@
+EXAM MANAGER - WEBSITE - DEPLOY IN 6 STEPS
+==========================================
+One file to deploy. Every user has a private account; one admin sees all.
+
+
+STEP 1  Upload these two files to your GitHub repo (root level):
+
+            app.py              <- about 90 KB, the whole app
+            requirements.txt
+
+        Add file -> Upload files -> Commit changes.
+
+
+STEP 2  Render -> New + -> Web Service -> pick the repository.
+
+            Name            exam-manager
+            Region          Singapore
+            Branch          main
+            Root Directory  (leave empty)
+            Language        Python 3
+            Build Command   pip install -r requirements.txt
+            Start Command   gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+            Instance Type   Free
+
+
+STEP 3  Advanced -> Add Environment Variable:
+
+            ADMIN_USERNAME   admin            (or your name)
+            ADMIN_PASSWORD   the password you want for the admin
+            SECRET_KEY       click Generate
+            SCHOOL_NAME      Jindal Public School
+
+        If you do not set ADMIN_PASSWORD, the app generates one and
+        prints it in the Render logs on first boot.
+
+
+STEP 4  Create Web Service, wait for "Live" (2-3 minutes).
+
+
+STEP 5  Open  https://<your-app>.onrender.com/healthz
+        Every line should say "ok": true, including "admin account".
+        (Logged out it only answers {"status": "ok"} - log in to see the
+        full checklist.)
+
+
+STEP 6  Log in as the admin, open "Users", and create one account per
+        teacher. Give each of them a username and password.
+
+        From then on:
+          - a teacher sees ONLY their own students, exams, marks, results
+          - the admin sees everybody's data (Owner column in the tables)
+          - admins can disable or delete accounts
+
+
+GETTING FOUND ON GOOGLE
+   "/" is just the login screen. "/about" is a public page Google may
+   index; the app itself (/login, /dashboard, ...) sends a noindex header.
+   1. Search Console -> Removals -> WITHDRAW any removal request you filed
+   2. URL Inspection -> https://<your-app>.onrender.com/about
+      -> Test live URL -> Request indexing
+   3. Sitemaps -> submit  sitemap.xml
+   Indexing takes a few days.
+
+FREE PLAN
+   The database is wiped on every redeploy/restart. For real data add a
+   Render Disk mounted at /var/data and set
+   DB_PATH=/var/data/exam_manager.db
