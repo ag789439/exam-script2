@@ -428,7 +428,7 @@ def load_user():
                        (user_id,), one=True)
         if g.user is None:
             session.clear()
-    if request.endpoint in ("welcome", "login", "static", "healthz",
+    if request.endpoint in ("welcome","about", "login", "static", "healthz",
                             "robots", "sitemap"):
         return None
     if g.user is None:
@@ -500,9 +500,18 @@ def logout():
 
 
 @app.route("/")
+@app.route("/")
 def welcome():
-    """Public, indexable landing page. The application lives behind /login."""
+    """The front door is the login screen - nothing else."""
+    if getattr(g, "user", None):
+        return redirect(url_for("dashboard"))
     return redirect(url_for("login"))
+
+
+@app.route("/about")
+def about():
+    """Public, indexable page about the product."""
+    return render_template("welcome.html")
 
 
 @app.route("/dashboard")
@@ -1256,7 +1265,7 @@ def robots():
     """Only the public landing page may be indexed - the app stays private."""
     lines = [
         "User-agent: *",
-        "Allow: /$",
+        "Allow: /about$",
         "Allow: /static/",
         "Disallow: /",
         f"Sitemap: {request.host_url.rstrip('/')}/sitemap.xml",
@@ -1266,7 +1275,7 @@ def robots():
 
 @app.route("/sitemap.xml")
 def sitemap():
-    url = url_for("welcome", _external=True)
+    url = url_for("about", _external=True)
     xml = ('<?xml version="1.0" encoding="UTF-8"?>'
            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
            f"<url><loc>{url}</loc><changefreq>weekly</changefreq>"
@@ -1277,7 +1286,7 @@ def sitemap():
 @app.after_request
 def no_index(response):
     """Private pages ask crawlers to stay away; the landing page is open."""
-    if request.endpoint not in ("welcome", "static", "robots", "sitemap"):
+    if request.endpoint not in ("about", "static", "robots", "sitemap"):
         response.headers["X-Robots-Tag"] = "noindex, nofollow"
     return response
 
