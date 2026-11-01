@@ -34,7 +34,7 @@ import os
 import secrets
 import sqlite3
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import (Flask, Response, abort, flash, g, redirect,
                    render_template, render_template_string, request, session,
@@ -48,7 +48,7 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin").strip() or "admin"
 ADMIN_PASSWORD = (os.environ.get("ADMIN_PASSWORD", "").strip()
                   or os.environ.get("APP_PASSWORD", "").strip())
-SCHOOL_NAME = os.environ.get("SCHOOL_NAME", "Examination Management System")
+SCHOOL_NAME = os.environ.get("SCHOOL_NAME", "Jindal Public School")
 
 
 # ==========================================================================
@@ -60,17 +60,17 @@ TEMPLATES = {
     'welcome.html':
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>Exam Script 2 — Examination Management Software for Schools</title>\n<meta name="description" content="Exam Script 2 is a school examination management app: student admission records, exam scheduling, marks entry and result sheets with grades and rank. Works in any browser, no installation.">\n<meta name="keywords" content="Exam Script 2, examination management software, school exam software, marks entry, result sheet, report card software India">\n<meta property="og:title" content="Exam Script 2 — Examination Management for Schools">\n<meta property="og:description" content="Students, exams, exam schedule, marks entry and results with grades and rank — in one browser app.">\n<meta property="og:type" content="website">\n<link rel="stylesheet" href="{{ url_for(\'static\', filename=\'style.css\') }}">\n<link rel="icon" href="{{ url_for(\'static\', filename=\'icon.png\') }}">\n<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "SoftwareApplication",\n  "name": "Exam Script 2",\n  "applicationCategory": "BusinessApplication",\n  "operatingSystem": "Any (web browser)",\n  "description": "School examination management: student records, exam schedule, marks entry and result sheets with percentage, grades and rank.",\n  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "INR"}\n}\n</script>\n</head>\n<body class="landing-body">\n\n<header class="landing-nav">\n  <div class="landing-wrap nav-inner">\n    <div class="brand-inline">\n      <div class="badge">EX</div>\n      <strong>Exam Script 2</strong>\n    </div>\n    <nav>\n      <a href="#features">Features</a>\n      <a href="#how">How it works</a>\n      <a class="btn primary small" href="{{ url_for(\'login\') }}">Staff login</a>\n    </nav>\n  </div>\n</header>\n\n<section class="hero">\n  <div class="landing-wrap">\n    <p class="eyebrow">Examination management, simplified</p>\n    <h1>Exam Script 2</h1>\n    <p class="lead">\n      One place for a school\'s whole examination cycle — student admission\n      records, the exam schedule, marks entry, and result sheets with\n      percentage, grades and rank. Runs in the browser, nothing to install.\n    </p>\n    <div class="hero-actions">\n      <a class="btn primary" href="{{ url_for(\'login\') }}">Staff login</a>\n      <a class="btn ghost" href="#features">See what it does</a>\n    </div>\n    <p class="tiny muted">Access is by account only — every teacher sees their own\n      class data, and an admin sees the whole school.</p>\n  </div>\n</section>\n\n<section id="features" class="landing-section">\n  <div class="landing-wrap">\n    <h2>What it does</h2>\n    <div class="feature-grid">\n      <article class="feature">\n        <h3>Students</h3>\n        <p>Admission number, roll number, class, section, date of admission,\n           parents\' details, phone and email. Search, edit and export to CSV.</p>\n      </article>\n      <article class="feature">\n        <h3>Exams</h3>\n        <p>Create exams by type — unit test, mid term, half yearly, annual,\n           pre-board, practical — for a class and academic year.</p>\n      </article>\n      <article class="feature">\n        <h3>Exam schedule</h3>\n        <p>One paper per subject with date, start time, duration, hall,\n           invigilator, maximum marks and pass marks.</p>\n      </article>\n      <article class="feature">\n        <h3>Marks entry</h3>\n        <p>Pick an exam and subject, fill the whole sheet in one screen.\n           Out-of-range entries are refused automatically.</p>\n      </article>\n      <article class="feature">\n        <h3>Results</h3>\n        <p>Total, percentage, CBSE-style grade, failed subjects, pass or fail,\n           and rank — with ties handled. Export the result sheet to CSV.</p>\n      </article>\n      <article class="feature">\n        <h3>Accounts</h3>\n        <p>Each teacher logs in with their own username and password and sees\n           only their own records. One admin account oversees everything.</p>\n      </article>\n    </div>\n  </div>\n</section>\n\n<section id="how" class="landing-section alt">\n  <div class="landing-wrap">\n    <h2>How it works</h2>\n    <ol class="steps">\n      <li><strong>Create the subjects</strong> for a class — or load a standard set.</li>\n      <li><strong>Add the students</strong> with their admission details.</li>\n      <li><strong>Create the exam</strong> and schedule one paper per subject.</li>\n      <li><strong>Enter the marks</strong> subject by subject.</li>\n      <li><strong>Generate the results</strong> and export the sheet.</li>\n    </ol>\n    <p class="muted">Built for schools that want something simple and offline-friendly\n      instead of a heavyweight ERP.</p>\n  </div>\n</section>\n\n<section class="landing-cta">\n  <div class="landing-wrap">\n    <h2>Already have an account?</h2>\n    <p>Sign in to open your dashboard.</p>\n    <a class="btn primary" href="{{ url_for(\'login\') }}">Staff login</a>\n  </div>\n</section>\n\n<footer class="landing-foot">\n  <div class="landing-wrap">\n    <span>Exam Script 2 · examination management for schools</span>\n    <span class="muted">Data stays on the school\'s own server · no advertising, no tracking</span>\n  </div>\n</footer>\n\n</body>\n</html>\n',
     'base.html':
-        '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<meta name="robots" content="noindex, nofollow">\n<title>{% block title %}Dashboard{% endblock %} · {{ school_name }}</title>\n<link rel="stylesheet" href="{{ url_for(\'static\', filename=\'style.css\') }}">\n<link rel="icon" href="{{ url_for(\'static\', filename=\'icon.png\') }}">\n</head>\n<body>\n<div class="shell">\n  <aside class="sidebar">\n    <div class="brand">\n      <div class="badge">EX</div>\n      <div class="brand-text">\n        <strong>Exam Manager</strong>\n        <span>{{ school_name }}</span>\n      </div>\n    </div>\n    <nav>\n      <a href="{{ url_for(\'dashboard\') }}" class="{{ \'active\' if request.endpoint == \'dashboard\' }}">Dashboard</a>\n      <a href="{{ url_for(\'students\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'student\') }}">Students</a>\n      <a href="{{ url_for(\'exams\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'exam\') }}">Exams</a>\n      <a href="{{ url_for(\'subjects\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'subject\') }}">Subjects</a>\n      <a href="{{ url_for(\'schedule\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'schedule\') }}">Exam schedule</a>\n      <a href="{{ url_for(\'marks\') }}" class="{{ \'active\' if request.endpoint == \'marks\' }}">Marks entry</a>\n      <a href="{{ url_for(\'results\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'results\') }}">Results</a>\n      {% if is_admin %}\n      <a href="{{ url_for(\'users\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'user\') }}">Users</a>\n      {% endif %}\n    </nav>\n    <div class="sidebar-foot">\n      {% if current_user %}\n      <span class="who">{{ current_user.full_name or current_user.username }}\n        <em>{{ current_user.role }}</em></span>\n      <a href="{{ url_for(\'logout\') }}">Log out</a>\n      {% endif %}\n      <span>SQLite · v3.1</span>\n    </div>\n  </aside>\n\n  <main>\n    {% if is_admin %}\n    <div class="banner admin">Admin mode — you can see and edit every user\'s data.</div>\n    {% endif %}\n    {% with messages = get_flashed_messages(with_categories=true) %}\n      {% for category, message in messages %}\n        <div class="flash {{ category }}">{{ message }}</div>\n      {% endfor %}\n    {% endwith %}\n    {% block content %}{% endblock %}\n  </main>\n</div>\n</body>\n</html>\n',
+        '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<meta name="robots" content="noindex, nofollow">\n<title>{% block title %}Dashboard{% endblock %} · {{ school_name }}</title>\n<link rel="stylesheet" href="{{ url_for(\'static\', filename=\'style.css\') }}">\n<link rel="icon" href="{{ url_for(\'static\', filename=\'icon.png\') }}">\n</head>\n<body>\n<div class="shell">\n  <aside class="sidebar">\n    <div class="brand">\n      <div class="badge">EX</div>\n      <div class="brand-text">\n        <strong>Exam Manager</strong>\n        <span>{{ school_name }}</span>\n      </div>\n    </div>\n    <nav>\n      {% if current_user and current_user.role == \'student\' %}\n      <a href="{{ url_for(\'my_result\') }}" class="{{ \'active\' if request.endpoint == \'my_result\' }}">My result</a>\n      <a href="{{ url_for(\'my_attendance\') }}" class="{{ \'active\' if request.endpoint == \'my_attendance\' }}">My attendance</a>\n      <a href="{{ url_for(\'my_homework\') }}" class="{{ \'active\' if request.endpoint == \'my_homework\' }}">Homework</a>\n      <a href="{{ url_for(\'notices\') }}" class="{{ \'active\' if request.endpoint == \'notices\' }}">Notices</a>\n      <a href="{{ url_for(\'password\') }}" class="{{ \'active\' if request.endpoint == \'password\' }}">Password</a>\n      {% else %}\n      <a href="{{ url_for(\'dashboard\') }}" class="{{ \'active\' if request.endpoint == \'dashboard\' }}">Dashboard</a>\n      <a href="{{ url_for(\'students\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'student\') }}">Students</a>\n      <a href="{{ url_for(\'exams\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'exam\') }}">Exams</a>\n      <a href="{{ url_for(\'subjects\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'subject\') }}">Subjects</a>\n      <a href="{{ url_for(\'schedule\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'schedule\') }}">Exam schedule</a>\n      <a href="{{ url_for(\'attendance\') }}" class="{{ \'active\' if request.endpoint == \'attendance\' }}">Attendance</a>\n      <a href="{{ url_for(\'homework\') }}" class="{{ \'active\' if request.endpoint == \'homework\' }}">Homework</a>\n      <a href="{{ url_for(\'marks\') }}" class="{{ \'active\' if request.endpoint == \'marks\' }}">Marks entry</a>\n      <a href="{{ url_for(\'results\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'results\') }}">Results</a>\n      <a href="{{ url_for(\'parents\') }}" class="{{ \'active\' if request.endpoint == \'parents\' }}">Parents</a>\n      <a href="{{ url_for(\'circulars\') }}" class="{{ \'active\' if request.endpoint == \'circulars\' }}">Circulars</a>\n      {% if is_admin %}\n      <a href="{{ url_for(\'users\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'user\') }}">Users</a>\n      {% endif %}\n      {% endif %}\n    </nav>\n    <div class="sidebar-foot">\n      {% if current_user %}\n      <span class="who">{{ current_user.full_name or current_user.username }}\n        <em>{{ current_user.role }}</em></span>\n      {% if current_user.role != \'student\' %}\n      <a href="{{ url_for(\'password\') }}">Change password</a>\n      {% endif %}\n      <a href="{{ url_for(\'logout\') }}">Log out</a>\n      {% endif %}\n      <span>SQLite · v3.1</span>\n    </div>\n  </aside>\n\n  <main>\n    {% if is_admin %}\n    <div class="banner admin">Admin mode — you can see and edit every user\'s data.</div>\n    {% endif %}\n    {% with messages = get_flashed_messages(with_categories=true) %}\n      {% for category, message in messages %}\n        <div class="flash {{ category }}">{{ message }}</div>\n      {% endfor %}\n    {% endwith %}\n    {% block content %}{% endblock %}\n  </main>\n</div>\n</body>\n</html>\n',
     'login.html':
         '{% extends "base.html" %}\n{% block title %}Log in{% endblock %}\n{% block content %}\n<div class="login-wrap">\n  <form class="card login" method="post">\n    <h1>Log in</h1>\n    <p class="muted">{{ school_name }} · examination module</p>\n    <label>Username\n      <input name="username" autofocus required autocomplete="username">\n    </label>\n    <label>Password\n      <input type="password" name="password" required autocomplete="current-password">\n    </label>\n    <button class="btn primary" type="submit">Log in</button>\n    <p class="muted small">Each account sees only its own data. Ask the admin\n      for a username and password.</p>\n    <p class="muted small"><a href="{{ url_for(\'about\') }}">About Exam Script 2</a></p>\n  </form>\n</div>\n{% endblock %}\n',
     'dashboard.html':
-        '{% extends "base.html" %}\n{% block title %}Dashboard{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div>\n    <h1>Dashboard</h1>\n    <p>{{ today }} · a quick view of your examination data</p>\n  </div>\n</header>\n\n<div class="tiles">\n  <div class="tile"><i class="bar indigo"></i><b>{{ stats.students }}</b><span>Students</span></div>\n  <div class="tile"><i class="bar sky"></i><b>{{ stats.exams }}</b><span>Exams</span></div>\n  <div class="tile"><i class="bar green"></i><b>{{ stats.subjects }}</b><span>Subjects</span></div>\n  <div class="tile"><i class="bar amber"></i><b>{{ stats.papers }}</b><span>Papers scheduled</span></div>\n</div>\n\n<div class="two-col">\n  <section class="card">\n    <div class="card-head">\n      <h2>Recent admissions</h2>\n      <a class="btn ghost small" href="{{ url_for(\'students\') }}">All students</a>\n    </div>\n    <div class="table-wrap">\n      <table class="grid">\n        <thead><tr><th>Admission No</th><th>Name</th><th>Class</th><th>Admitted on</th></tr></thead>\n        <tbody>\n        {% for s in recent %}\n          <tr><td>{{ s.admission_no }}</td><td>{{ s.name }}</td>\n              <td>{{ s.class_name }}</td><td>{{ disp_date(s.admission_date) }}</td></tr>\n        {% else %}\n          <tr><td colspan="4" class="empty">No students yet.</td></tr>\n        {% endfor %}\n        </tbody>\n      </table>\n    </div>\n  </section>\n\n  <section class="card">\n    <div class="card-head">\n      <h2>Exams</h2>\n      <a class="btn ghost small" href="{{ url_for(\'exams\') }}">All exams</a>\n    </div>\n    <div class="table-wrap">\n      <table class="grid">\n        <thead><tr><th>Exam type</th><th>Class</th><th>Starts</th><th>Status</th></tr></thead>\n        <tbody>\n        {% for e in exams %}\n          <tr><td>{{ e.exam_type or e.exam_name }}</td><td>{{ e.class_name }}</td>\n              <td>{{ disp_date(e.start_date) }}</td><td>{{ e.status }}</td></tr>\n        {% else %}\n          <tr><td colspan="4" class="empty">No exams yet.</td></tr>\n        {% endfor %}\n        </tbody>\n      </table>\n    </div>\n  </section>\n</div>\n{% endblock %}\n',
+        '{% extends "base.html" %}\n{% block title %}Dashboard{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div>\n    <h1>Dashboard</h1>\n    <p>{{ today }} · a quick view of your examination data</p>\n  </div>\n</header>\n\n{% if is_admin %}\n<section class="card" style="display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap">\n  <div>\n    <h2 class="card-title">Demo school</h2>\n    <p class="muted">Loads 10 students of class 8-A with parents, one exam with marks,\n       ten days of attendance, homework, three circulars and two teacher accounts\n       (teacher1 / teacher2, password <code>school1234</code>).</p>\n  </div>\n  <form method="post" action="{{ url_for(\'demo_seed\') }}">\n    <button class="btn primary" type="submit">Load demo data</button>\n  </form>\n</section>\n{% endif %}\n\n<div class="tiles">\n  <div class="tile"><i class="bar indigo"></i><b>{{ stats.students }}</b><span>Students</span></div>\n  <div class="tile"><i class="bar sky"></i><b>{{ stats.exams }}</b><span>Exams</span></div>\n  <div class="tile"><i class="bar green"></i><b>{{ stats.subjects }}</b><span>Subjects</span></div>\n  <div class="tile"><i class="bar amber"></i><b>{{ stats.papers }}</b><span>Papers scheduled</span></div>\n</div>\n\n<div class="two-col">\n  <section class="card">\n    <div class="card-head">\n      <h2>Recent admissions</h2>\n      <a class="btn ghost small" href="{{ url_for(\'students\') }}">All students</a>\n    </div>\n    <div class="table-wrap">\n      <table class="grid">\n        <thead><tr><th>Admission No</th><th>Name</th><th>Class</th><th>Admitted on</th></tr></thead>\n        <tbody>\n        {% for s in recent %}\n          <tr><td>{{ s.admission_no }}</td><td>{{ s.name }}</td>\n              <td>{{ s.class_name }}</td><td>{{ disp_date(s.admission_date) }}</td></tr>\n        {% else %}\n          <tr><td colspan="4" class="empty">No students yet.</td></tr>\n        {% endfor %}\n        </tbody>\n      </table>\n    </div>\n  </section>\n\n  <section class="card">\n    <div class="card-head">\n      <h2>Exams</h2>\n      <a class="btn ghost small" href="{{ url_for(\'exams\') }}">All exams</a>\n    </div>\n    <div class="table-wrap">\n      <table class="grid">\n        <thead><tr><th>Exam type</th><th>Class</th><th>Starts</th><th>Status</th></tr></thead>\n        <tbody>\n        {% for e in exams %}\n          <tr><td>{{ e.exam_type or e.exam_name }}</td><td>{{ e.class_name }}</td>\n              <td>{{ disp_date(e.start_date) }}</td><td>{{ e.status }}</td></tr>\n        {% else %}\n          <tr><td colspan="4" class="empty">No exams yet.</td></tr>\n        {% endfor %}\n        </tbody>\n      </table>\n    </div>\n  </section>\n</div>\n{% endblock %}\n',
     'students.html':
-        '{% extends "base.html" %}\n{% block title %}Students{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div>\n    <h1>Students</h1>\n    <p>Admission details and student master data</p>\n  </div>\n  <div class="actions">\n    <a class="btn ghost" href="{{ url_for(\'students_csv\') }}">Export CSV</a>\n  </div>\n</header>\n\n<section class="card">\n  <details {{ \'open\' if editing }}>\n    <summary>{{ \'Edit student\' if editing else \'Add a student\' }}</summary>\n    <form class="form-grid" method="post" action="{{ url_for(\'student_save\') }}">\n      <input type="hidden" name="id" value="{{ editing.id if editing else \'\' }}">\n      <label>Admission No *<input name="admission_no" required value="{{ editing.admission_no if editing else \'\' }}"></label>\n      <label>Roll No *<input name="roll_no" required value="{{ editing.roll_no if editing else \'\' }}"></label>\n      <label>Student name *<input name="name" required value="{{ editing.name if editing else \'\' }}"></label>\n      <label>Class *<input name="class_name" required value="{{ editing.class_name if editing else \'\' }}"></label>\n      <label>Section\n        <select name="section">\n          <option value=""></option>\n          {% for s in sections %}<option {{ \'selected\' if editing and editing.section == s }}>{{ s }}</option>{% endfor %}\n        </select>\n      </label>\n      <label>Date of birth<input name="dob" placeholder="dd/mm/yyyy" value="{{ disp_date(editing.dob) if editing else \'\' }}"></label>\n      <label>Gender\n        <select name="gender">\n          <option value=""></option>\n          {% for g in genders %}<option {{ \'selected\' if editing and editing.gender == g }}>{{ g }}</option>{% endfor %}\n        </select>\n      </label>\n      <label>Date of admission *<input name="admission_date" placeholder="dd/mm/yyyy" required value="{{ disp_date(editing.admission_date) if editing else \'\' }}"></label>\n      <label>Father\'s name<input name="father_name" value="{{ editing.father_name if editing else \'\' }}"></label>\n      <label>Mother\'s name<input name="mother_name" value="{{ editing.mother_name if editing else \'\' }}"></label>\n      <label>Phone<input name="phone" value="{{ editing.phone if editing else \'\' }}"></label>\n      <label>Email<input name="email" value="{{ editing.email if editing else \'\' }}"></label>\n      <label class="span-2">Address<input name="address" value="{{ editing.address if editing else \'\' }}"></label>\n      <label>Status\n        <select name="status">\n          {% for st in statuses %}<option {{ \'selected\' if (editing and editing.status == st) or (not editing and st == \'Active\') }}>{{ st }}</option>{% endfor %}\n        </select>\n      </label>\n      <div class="form-actions">\n        <button class="btn primary" type="submit">{{ \'Update student\' if editing else \'Save student\' }}</button>\n        {% if editing %}<a class="btn ghost" href="{{ url_for(\'students\') }}">Cancel</a>{% endif %}\n      </div>\n    </form>\n  </details>\n</section>\n\n<section class="card">\n  <div class="card-head">\n    <h2>All students <span class="pill">{{ students|length }}</span></h2>\n    <form class="search" method="get">\n      <input name="q" value="{{ q }}" placeholder="Search name, roll no, admission no, class">\n      <button class="btn ghost" type="submit">Search</button>\n      {% if q %}<a class="btn ghost" href="{{ url_for(\'students\') }}">Reset</a>{% endif %}\n    </form>\n  </div>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead>\n        <tr><th>Admission No</th><th>Roll</th><th>Name</th><th>Class</th><th>Section</th>\n            <th>Admitted</th><th>DOB</th><th>Phone</th><th>Status</th>\n            {% if is_admin %}<th>Owner</th>{% endif %}<th></th></tr>\n      </thead>\n      <tbody>\n      {% for s in students %}\n        <tr>\n          <td>{{ s.admission_no }}</td><td>{{ s.roll_no }}</td><td>{{ s.name }}</td>\n          <td>{{ s.class_name }}</td><td>{{ s.section or \'\' }}</td>\n          <td>{{ disp_date(s.admission_date) }}</td><td>{{ disp_date(s.dob) }}</td>\n          <td>{{ s.phone or \'\' }}</td><td>{{ s.status }}</td>\n          {% if is_admin %}<td>{{ owners.get(s.owner_id, \'-\') }}</td>{% endif %}\n          <td class="row-actions">\n            <a class="btn ghost small" href="{{ url_for(\'students\', edit=s.id) }}">Edit</a>\n            <form method="post" action="{{ url_for(\'student_delete\', sid=s.id) }}"\n                  onsubmit="return confirm(\'Delete {{ s.name }} and every mark linked to them?\')">\n              <button class="btn danger small" type="submit">Delete</button>\n            </form>\n          </td>\n        </tr>\n      {% else %}\n        <tr><td colspan="{{ 11 if is_admin else 10 }}" class="empty">No students found.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
+        '{% extends "base.html" %}\n{% block title %}Students{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div>\n    <h1>Students</h1>\n    <p>Admission details and student master data</p>\n  </div>\n  <div class="actions">\n    <a class="btn ghost" href="{{ url_for(\'students_csv\') }}">Export CSV</a>\n  </div>\n</header>\n\n<section class="card">\n  <details {{ \'open\' if editing }}>\n    <summary>{{ \'Edit student\' if editing else \'Add a student\' }}</summary>\n    <form class="form-grid" method="post" action="{{ url_for(\'student_save\') }}">\n      <input type="hidden" name="id" value="{{ editing.id if editing else \'\' }}">\n      <label>Admission No *<input name="admission_no" required value="{{ editing.admission_no if editing else \'\' }}"></label>\n      <label>Roll No *<input name="roll_no" required value="{{ editing.roll_no if editing else \'\' }}"></label>\n      <label>Student name *<input name="name" required value="{{ editing.name if editing else \'\' }}"></label>\n      <label>Class *<input name="class_name" required value="{{ editing.class_name if editing else \'\' }}"></label>\n      <label>Section\n        <select name="section">\n          <option value=""></option>\n          {% for s in sections %}<option {{ \'selected\' if editing and editing.section == s }}>{{ s }}</option>{% endfor %}\n        </select>\n      </label>\n      <label>Date of birth<input name="dob" placeholder="dd/mm/yyyy" value="{{ disp_date(editing.dob) if editing else \'\' }}"></label>\n      <label>Gender\n        <select name="gender">\n          <option value=""></option>\n          {% for g in genders %}<option {{ \'selected\' if editing and editing.gender == g }}>{{ g }}</option>{% endfor %}\n        </select>\n      </label>\n      <label>Date of admission *<input name="admission_date" placeholder="dd/mm/yyyy" required value="{{ disp_date(editing.admission_date) if editing else \'\' }}"></label>\n      <label>Father\'s name<input name="father_name" value="{{ editing.father_name if editing else \'\' }}"></label>\n      <label>Mother\'s name<input name="mother_name" value="{{ editing.mother_name if editing else \'\' }}"></label>\n      <label>Phone<input name="phone" value="{{ editing.phone if editing else \'\' }}"></label>\n      <label>Email<input name="email" value="{{ editing.email if editing else \'\' }}"></label>\n      <label class="span-2">Address<input name="address" value="{{ editing.address if editing else \'\' }}"></label>\n      <label>Status\n        <select name="status">\n          {% for st in statuses %}<option {{ \'selected\' if (editing and editing.status == st) or (not editing and st == \'Active\') }}>{{ st }}</option>{% endfor %}\n        </select>\n      </label>\n      <div class="form-actions">\n        <button class="btn primary" type="submit">{{ \'Update student\' if editing else \'Save student\' }}</button>\n        {% if editing %}<a class="btn ghost" href="{{ url_for(\'students\') }}">Cancel</a>{% endif %}\n      </div>\n    </form>\n  </details>\n</section>\n\n<section class="card">\n  <div class="card-head">\n    <h2>All students <span class="pill">{{ students|length }}</span></h2>\n    <form class="search" method="get">\n      <input name="q" value="{{ q }}" placeholder="Search name, roll no, admission no, class">\n      <button class="btn ghost" type="submit">Search</button>\n      {% if q %}<a class="btn ghost" href="{{ url_for(\'students\') }}">Reset</a>{% endif %}\n    </form>\n  </div>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead>\n        <tr><th>Admission No</th><th>Roll</th><th>Name</th><th>Class</th><th>Section</th>\n            <th>Admitted</th><th>DOB</th><th>Phone</th><th>Status</th>\n            <th>Owner</th><th></th></tr>\n      </thead>\n      <tbody>\n      {% for s in students %}\n        <tr>\n          <td>{{ s.admission_no }}</td><td>{{ s.roll_no }}</td><td>{{ s.name }}</td>\n          <td>{{ s.class_name }}</td><td>{{ s.section or \'\' }}</td>\n          <td>{{ disp_date(s.admission_date) }}</td><td>{{ disp_date(s.dob) }}</td>\n          <td>{{ s.phone or \'\' }}</td><td>{{ s.status }}</td>\n          <td>{{ owners.get(s.owner_id, \'-\') }}</td>\n          <td class="row-actions">\n            <a class="btn ghost small" href="{{ url_for(\'students\', edit=s.id) }}">Edit</a>\n            <form method="post" action="{{ url_for(\'student_delete\', sid=s.id) }}"\n                  onsubmit="return confirm(\'Delete {{ s.name }} and every mark linked to them?\')">\n              <button class="btn danger small" type="submit">Delete</button>\n            </form>\n          </td>\n        </tr>\n      {% else %}\n        <tr><td colspan="{{ 11 if is_admin else 10 }}" class="empty">No students found.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
     'exams.html':
-        '{% extends "base.html" %}\n{% block title %}Exams{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div>\n    <h1>Exams</h1>\n    <p>The exam type is the exam\'s name — no separate exam name is needed</p>\n  </div>\n</header>\n\n<section class="card">\n  <details {{ \'open\' if editing }}>\n    <summary>{{ \'Edit exam\' if editing else \'Create an exam\' }}</summary>\n    <form class="form-grid" method="post" action="{{ url_for(\'exam_save\') }}">\n      <input type="hidden" name="id" value="{{ editing.id if editing else \'\' }}">\n      <label>Exam type *\n        <input name="exam_type" list="exam-types" required\n               value="{{ (editing.exam_type or editing.exam_name) if editing else \'\' }}">\n        <datalist id="exam-types">\n          {% for t in exam_types %}<option value="{{ t }}">{% endfor %}\n        </datalist>\n      </label>\n      <label>Academic year<input name="academic_year" value="{{ editing.academic_year if editing else \'2026-27\' }}"></label>\n      <label>Class<input name="class_name" value="{{ editing.class_name if editing else \'\' }}"></label>\n      <label>Start date<input name="start_date" placeholder="dd/mm/yyyy" value="{{ disp_date(editing.start_date) if editing else \'\' }}"></label>\n      <label>End date<input name="end_date" placeholder="dd/mm/yyyy" value="{{ disp_date(editing.end_date) if editing else \'\' }}"></label>\n      <label>Status\n        <select name="status">\n          {% for st in statuses %}<option {{ \'selected\' if editing and editing.status == st or (not editing and st == \'Scheduled\') }}>{{ st }}</option>{% endfor %}\n        </select>\n      </label>\n      <label class="span-2">Remarks<input name="remarks" value="{{ editing.remarks if editing else \'\' }}"></label>\n      <div class="form-actions">\n        <button class="btn primary" type="submit">{{ \'Update exam\' if editing else \'Save exam\' }}</button>\n        {% if editing %}<a class="btn ghost" href="{{ url_for(\'exams\') }}">Cancel</a>{% endif %}\n      </div>\n    </form>\n  </details>\n</section>\n\n<section class="card">\n  <div class="card-head"><h2>All exams <span class="pill">{{ exams|length }}</span></h2></div>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Exam type</th><th>Academic year</th><th>Class</th><th>Start</th>\n                 <th>End</th><th>Status</th><th>Remarks</th>\n                 {% if is_admin %}<th>Owner</th>{% endif %}<th></th></tr></thead>\n      <tbody>\n      {% for e in exams %}\n        <tr>\n          <td>{{ e.exam_type or e.exam_name }}</td><td>{{ e.academic_year }}</td>\n          <td>{{ e.class_name }}</td><td>{{ disp_date(e.start_date) }}</td>\n          <td>{{ disp_date(e.end_date) }}</td><td>{{ e.status }}</td>\n          <td class="muted">{{ e.remarks or \'\' }}</td>\n          {% if is_admin %}<td>{{ owners.get(e.owner_id, \'-\') }}</td>{% endif %}\n          <td class="row-actions">\n            <a class="btn ghost small" href="{{ url_for(\'exams\', edit=e.id) }}">Edit</a>\n            <form method="post" action="{{ url_for(\'exam_delete\', eid=e.id) }}"\n                  onsubmit="return confirm(\'Delete this exam with its schedule and marks?\')">\n              <button class="btn danger small" type="submit">Delete</button>\n            </form>\n          </td>\n        </tr>\n      {% else %}\n        <tr><td colspan="{{ 9 if is_admin else 8 }}" class="empty">No exams yet.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
+        '{% extends "base.html" %}\n{% block title %}Exams{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div>\n    <h1>Exams</h1>\n    <p>The exam type is the exam\'s name — no separate exam name is needed</p>\n  </div>\n</header>\n\n<section class="card">\n  <details {{ \'open\' if editing }}>\n    <summary>{{ \'Edit exam\' if editing else \'Create an exam\' }}</summary>\n    <form class="form-grid" method="post" action="{{ url_for(\'exam_save\') }}">\n      <input type="hidden" name="id" value="{{ editing.id if editing else \'\' }}">\n      <label>Exam type *\n        <input name="exam_type" list="exam-types" required\n               value="{{ (editing.exam_type or editing.exam_name) if editing else \'\' }}">\n        <datalist id="exam-types">\n          {% for t in exam_types %}<option value="{{ t }}">{% endfor %}\n        </datalist>\n      </label>\n      <label>Academic year<input name="academic_year" value="{{ editing.academic_year if editing else \'2026-27\' }}"></label>\n      <label>Class<input name="class_name" value="{{ editing.class_name if editing else \'\' }}"></label>\n      <label>Start date<input name="start_date" placeholder="dd/mm/yyyy" value="{{ disp_date(editing.start_date) if editing else \'\' }}"></label>\n      <label>End date<input name="end_date" placeholder="dd/mm/yyyy" value="{{ disp_date(editing.end_date) if editing else \'\' }}"></label>\n      <label>Status\n        <select name="status">\n          {% for st in statuses %}<option {{ \'selected\' if editing and editing.status == st or (not editing and st == \'Scheduled\') }}>{{ st }}</option>{% endfor %}\n        </select>\n      </label>\n      <label class="span-2">Remarks<input name="remarks" value="{{ editing.remarks if editing else \'\' }}"></label>\n      <div class="form-actions">\n        <button class="btn primary" type="submit">{{ \'Update exam\' if editing else \'Save exam\' }}</button>\n        {% if editing %}<a class="btn ghost" href="{{ url_for(\'exams\') }}">Cancel</a>{% endif %}\n      </div>\n    </form>\n  </details>\n</section>\n\n<section class="card">\n  <div class="card-head"><h2>All exams <span class="pill">{{ exams|length }}</span></h2></div>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Exam type</th><th>Academic year</th><th>Class</th><th>Start</th>\n                 <th>End</th><th>Status</th><th>Remarks</th>\n                 <th>Owner</th><th></th></tr></thead>\n      <tbody>\n      {% for e in exams %}\n        <tr>\n          <td>{{ e.exam_type or e.exam_name }}</td><td>{{ e.academic_year }}</td>\n          <td>{{ e.class_name }}</td><td>{{ disp_date(e.start_date) }}</td>\n          <td>{{ disp_date(e.end_date) }}</td><td>{{ e.status }}</td>\n          <td class="muted">{{ e.remarks or \'\' }}</td>\n          <td>{{ owners.get(e.owner_id, \'-\') }}</td>\n          <td class="row-actions">\n            <a class="btn ghost small" href="{{ url_for(\'exams\', edit=e.id) }}">Edit</a>\n            <form method="post" action="{{ url_for(\'exam_delete\', eid=e.id) }}"\n                  onsubmit="return confirm(\'Delete this exam with its schedule and marks?\')">\n              <button class="btn danger small" type="submit">Delete</button>\n            </form>\n          </td>\n        </tr>\n      {% else %}\n        <tr><td colspan="{{ 9 if is_admin else 8 }}" class="empty">No exams yet.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
     'subjects.html':
-        '{% extends "base.html" %}\n{% block title %}Subjects{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Subjects</h1><p>Subject master used by the exam schedule</p></div>\n  <div class="actions">\n    <form method="post" action="{{ url_for(\'subject_defaults\') }}">\n      <button class="btn ghost" type="submit">Load defaults</button>\n    </form>\n  </div>\n</header>\n\n<section class="card">\n  <details {{ \'open\' if editing }}>\n    <summary>{{ \'Edit subject\' if editing else \'Add a subject\' }}</summary>\n    <form class="form-grid" method="post" action="{{ url_for(\'subject_save\') }}">\n      <input type="hidden" name="id" value="{{ editing.id if editing else \'\' }}">\n      <label>Subject code *<input name="subject_code" required value="{{ editing.subject_code if editing else \'\' }}"></label>\n      <label>Subject name *<input name="subject_name" required value="{{ editing.subject_name if editing else \'\' }}"></label>\n      <label>Class (blank = all)<input name="class_name" value="{{ editing.class_name if editing else \'\' }}"></label>\n      <div class="form-actions">\n        <button class="btn primary" type="submit">{{ \'Update subject\' if editing else \'Save subject\' }}</button>\n        {% if editing %}<a class="btn ghost" href="{{ url_for(\'subjects\') }}">Cancel</a>{% endif %}\n      </div>\n    </form>\n  </details>\n</section>\n\n<section class="card">\n  <div class="card-head"><h2>All subjects <span class="pill">{{ subjects|length }}</span></h2></div>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Code</th><th>Subject name</th><th>Class</th>\n                 {% if is_admin %}<th>Owner</th>{% endif %}<th></th></tr></thead>\n      <tbody>\n      {% for s in subjects %}\n        <tr>\n          <td>{{ s.subject_code }}</td><td>{{ s.subject_name }}</td><td>{{ s.class_name or \'\' }}</td>\n          {% if is_admin %}<td>{{ owners.get(s.owner_id, \'-\') }}</td>{% endif %}\n          <td class="row-actions">\n            <a class="btn ghost small" href="{{ url_for(\'subjects\', edit=s.id) }}">Edit</a>\n            <form method="post" action="{{ url_for(\'subject_delete\', sid=s.id) }}"\n                  onsubmit="return confirm(\'Delete {{ s.subject_name }}?\')">\n              <button class="btn danger small" type="submit">Delete</button>\n            </form>\n          </td>\n        </tr>\n      {% else %}\n        <tr><td colspan="{{ 5 if is_admin else 4 }}" class="empty">No subjects yet — use “Load defaults”.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
+        '{% extends "base.html" %}\n{% block title %}Subjects{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Subjects</h1><p>Subject master used by the exam schedule</p></div>\n  <div class="actions">\n    <form method="post" action="{{ url_for(\'subject_defaults\') }}">\n      <button class="btn ghost" type="submit">Load defaults</button>\n    </form>\n  </div>\n</header>\n\n<section class="card">\n  <details {{ \'open\' if editing }}>\n    <summary>{{ \'Edit subject\' if editing else \'Add a subject\' }}</summary>\n    <form class="form-grid" method="post" action="{{ url_for(\'subject_save\') }}">\n      <input type="hidden" name="id" value="{{ editing.id if editing else \'\' }}">\n      <label>Subject code *<input name="subject_code" required value="{{ editing.subject_code if editing else \'\' }}"></label>\n      <label>Subject name *<input name="subject_name" required value="{{ editing.subject_name if editing else \'\' }}"></label>\n      <label>Class (blank = all)<input name="class_name" value="{{ editing.class_name if editing else \'\' }}"></label>\n      <div class="form-actions">\n        <button class="btn primary" type="submit">{{ \'Update subject\' if editing else \'Save subject\' }}</button>\n        {% if editing %}<a class="btn ghost" href="{{ url_for(\'subjects\') }}">Cancel</a>{% endif %}\n      </div>\n    </form>\n  </details>\n</section>\n\n<section class="card">\n  <div class="card-head"><h2>All subjects <span class="pill">{{ subjects|length }}</span></h2></div>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Code</th><th>Subject name</th><th>Class</th>\n                 <th>Owner</th><th></th></tr></thead>\n      <tbody>\n      {% for s in subjects %}\n        <tr>\n          <td>{{ s.subject_code }}</td><td>{{ s.subject_name }}</td><td>{{ s.class_name or \'\' }}</td>\n          <td>{{ owners.get(s.owner_id, \'-\') }}</td>\n          <td class="row-actions">\n            <a class="btn ghost small" href="{{ url_for(\'subjects\', edit=s.id) }}">Edit</a>\n            <form method="post" action="{{ url_for(\'subject_delete\', sid=s.id) }}"\n                  onsubmit="return confirm(\'Delete {{ s.subject_name }}?\')">\n              <button class="btn danger small" type="submit">Delete</button>\n            </form>\n          </td>\n        </tr>\n      {% else %}\n        <tr><td colspan="{{ 5 if is_admin else 4 }}" class="empty">No subjects yet — use “Load defaults”.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
     'schedule.html':
         '{% extends "base.html" %}\n{% block title %}Exam schedule{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Exam schedule</h1><p>One paper per subject — date, time, hall and marks</p></div>\n</header>\n\n<section class="card">\n  <details open>\n    <summary>Add a paper</summary>\n    {% if not exams or not subjects %}\n      <p class="muted">Create at least one exam and one subject first.</p>\n    {% else %}\n    <form class="form-grid" method="post" action="{{ url_for(\'schedule_save\') }}">\n      <label>Exam *\n        <select name="exam_id" required>\n          <option value="">— choose —</option>\n          {% for e in exams %}<option value="{{ e.id }}">{{ exam_label(e) }}</option>{% endfor %}\n        </select>\n      </label>\n      <label>Subject *\n        <select name="subject_id" required>\n          <option value="">— choose —</option>\n          {% for s in subjects %}<option value="{{ s.id }}">{{ s.subject_name }} ({{ s.subject_code }})</option>{% endfor %}\n        </select>\n      </label>\n      <label>Exam date<input name="exam_date" placeholder="dd/mm/yyyy"></label>\n      <label>Start time<input name="start_time" placeholder="09:00"></label>\n      <label>Duration (minutes)<input name="duration" value="180"></label>\n      <label>Room / hall<input name="room"></label>\n      <label>Invigilator<input name="invigilator"></label>\n      <label>Max marks<input name="max_marks" value="100"></label>\n      <label>Pass marks<input name="pass_marks" value="33"></label>\n      <div class="form-actions"><button class="btn primary" type="submit">Add paper</button></div>\n    </form>\n    {% endif %}\n  </details>\n</section>\n\n<section class="card">\n  <div class="card-head"><h2>Scheduled papers <span class="pill">{{ papers|length }}</span></h2></div>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Exam</th><th>Subject</th><th>Date</th><th>Time</th><th>Duration</th>\n                 <th>Room</th><th>Invigilator</th><th>Max</th><th>Pass</th><th></th></tr></thead>\n      <tbody>\n      {% for p in papers %}\n        <tr>\n          <td>{{ exam_label(p) }}</td><td>{{ p.subject_name }}</td>\n          <td>{{ disp_date(p.exam_date) }}</td><td>{{ p.start_time }}</td>\n          <td>{{ p.duration }}</td><td>{{ p.room or \'\' }}</td>\n          <td>{{ p.invigilator or \'\' }}</td>\n          <td class="num">{{ fmt_num(p.max_marks) }}</td>\n          <td class="num">{{ fmt_num(p.pass_marks) }}</td>\n          <td class="row-actions">\n            <form method="post" action="{{ url_for(\'schedule_delete\', pid=p.id) }}"\n                  onsubmit="return confirm(\'Remove this paper and its marks?\')">\n              <button class="btn danger small" type="submit">Delete</button>\n            </form>\n          </td>\n        </tr>\n      {% else %}\n        <tr><td colspan="10" class="empty">No papers scheduled yet.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
     'marks.html':
@@ -78,10 +78,28 @@ TEMPLATES = {
     'results.html':
         '{% extends "base.html" %}\n{% block title %}Results{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Results</h1><p>Totals, percentage, grade, rank and pass / fail</p></div>\n  {% if results %}\n  <div class="actions">\n    <a class="btn ghost" href="{{ url_for(\'results_csv\', exam_id=exam_id, class_name=class_name) }}">Export CSV</a>\n  </div>\n  {% endif %}\n</header>\n\n<section class="card">\n  <form class="form-grid" method="get">\n    <label>Exam\n      <select name="exam_id" onchange="this.form.submit()">\n        <option value="">— choose —</option>\n        {% for e in exams %}\n          <option value="{{ e.id }}" {{ \'selected\' if exam_id == e.id|string }}>{{ exam_label(e) }}</option>\n        {% endfor %}\n      </select>\n    </label>\n    <label>Class\n      <input name="class_name" value="{{ class_name }}" placeholder="e.g. 8">\n    </label>\n    <div class="form-actions"><button class="btn primary" type="submit">Generate</button></div>\n  </form>\n</section>\n\n{% if info %}<p class="info">{{ info }}</p>{% endif %}\n\n{% if results %}\n<section class="card">\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Rank</th><th>Roll</th><th>Admission No</th><th>Name</th>\n                 <th>Obtained</th><th>Max</th><th>%</th><th>Grade</th>\n                 <th>Failed</th><th>Result</th></tr></thead>\n      <tbody>\n      {% for r in results %}\n        <tr>\n          <td>{{ r.rank }}</td><td>{{ r.roll_no }}</td><td>{{ r.admission_no }}</td>\n          <td>{{ r.name }}</td><td class="num">{{ fmt_num(r.obtained) }}</td>\n          <td class="num">{{ fmt_num(r.total_max) }}</td>\n          <td class="num">{{ \'%.2f\'|format(r.percentage) }}</td>\n          <td>{{ r.grade }}</td><td class="num">{{ r.failed_subjects }}</td>\n          <td>{% if r.result == \'Pass\' %}<span class="tag ok">Pass</span>\n              {% else %}<span class="tag bad">Fail</span>{% endif %}</td>\n        </tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endif %}\n{% endblock %}\n',
     'users.html':
-        '{% extends "base.html" %}\n{% block title %}Users{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div>\n    <h1>Users</h1>\n    <p>Every account keeps its own students, exams and marks. Only admins see\n       everything.</p>\n  </div>\n</header>\n\n<section class="card">\n  <details {{ \'open\' if editing }}>\n    <summary>{{ \'Edit user\' if editing else \'Add a user\' }}</summary>\n    <form class="form-grid" method="post" action="{{ url_for(\'user_save\') }}">\n      <input type="hidden" name="id" value="{{ editing.id if editing else \'\' }}">\n      <label>Username *\n        <input name="username" required value="{{ editing.username if editing else \'\' }}"\n               placeholder="e.g. teacher1">\n      </label>\n      <label>Full name\n        <input name="full_name" value="{{ editing.full_name if editing else \'\' }}">\n      </label>\n      <label>Role\n        <select name="role">\n          <option value="user" {{ \'selected\' if editing and editing.role == \'user\' }}>user</option>\n          <option value="admin" {{ \'selected\' if editing and editing.role == \'admin\' }}>admin</option>\n        </select>\n      </label>\n      <label>{{ \'New password (leave blank to keep)\' if editing else \'Password *\' }}\n        <input type="password" name="password" {{ \'\' if editing else \'required\' }}>\n      </label>\n      <div class="form-actions">\n        <button class="btn primary" type="submit">\n          {{ \'Update user\' if editing else \'Create user\' }}</button>\n        {% if editing %}<a class="btn ghost" href="{{ url_for(\'users\') }}">Cancel</a>{% endif %}\n      </div>\n    </form>\n  </details>\n</section>\n\n<section class="card">\n  <div class="card-head"><h2>Accounts <span class="pill">{{ users|length }}</span></h2></div>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Students</th>\n                 <th>Exams</th><th>Status</th><th></th></tr></thead>\n      <tbody>\n      {% for u in users %}\n        <tr>\n          <td>{{ u.username }}</td>\n          <td>{{ u.full_name or \'\' }}</td>\n          <td>{% if u.role == \'admin\' %}<span class="tag admin">admin</span>\n              {% else %}user{% endif %}</td>\n          <td class="num">{{ u.n_students }}</td>\n          <td class="num">{{ u.n_exams }}</td>\n          <td>{% if u.active %}<span class="tag ok">active</span>\n              {% else %}<span class="tag bad">disabled</span>{% endif %}</td>\n          <td class="row-actions">\n            <a class="btn ghost small" href="{{ url_for(\'users\', edit=u.id) }}">Edit</a>\n            <form method="post" action="{{ url_for(\'user_toggle\', user_id=u.id) }}">\n              <button class="btn ghost small" type="submit">\n                {{ \'Disable\' if u.active else \'Enable\' }}</button>\n            </form>\n            <form method="post" action="{{ url_for(\'user_delete\', user_id=u.id) }}"\n                  onsubmit="return confirm(\'Delete the account {{ u.username }}?\')">\n              <button class="btn danger small" type="submit">Delete</button>\n            </form>\n          </td>\n        </tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
+        '{% extends "base.html" %}\n{% block title %}Users{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div>\n    <h1>Users</h1>\n    <p>Every account keeps its own students, exams and marks. Only admins see\n       everything.</p>\n  </div>\n</header>\n\n<section class="card">\n  <details {{ \'open\' if editing }}>\n    <summary>{{ \'Edit user\' if editing else \'Add a user\' }}</summary>\n    <form class="form-grid" method="post" action="{{ url_for(\'user_save\') }}">\n      <input type="hidden" name="id" value="{{ editing.id if editing else \'\' }}">\n      <label>Username *\n        <input name="username" required value="{{ editing.username if editing else \'\' }}"\n               placeholder="e.g. teacher1">\n      </label>\n      <label>Full name\n        <input name="full_name" value="{{ editing.full_name if editing else \'\' }}">\n      </label>\n      <label>Role\n        <select name="role">\n          <option value="user" {{ \'selected\' if editing and editing.role == \'user\' }}>user</option>\n          <option value="admin" {{ \'selected\' if editing and editing.role == \'admin\' }}>admin</option>\n          <option value="student" {{ \'selected\' if editing and editing.role == \'student\' }}>student</option>\n        </select>\n      </label>\n      <label>Class teacher of <span class="muted">(for teacher accounts)</span>\n        <input name="class_name" placeholder="e.g. 8" value="{{ editing.class_name if editing and editing.class_name else \'\' }}">\n      </label>\n      <label>Section\n        <input name="section" placeholder="e.g. A" value="{{ editing.section if editing and editing.section else \'\' }}">\n      </label>\n      <label>Linked student <span class="muted">(only for student accounts)</span>\n        <select name="student_id">\n          <option value="">— none —</option>\n          {% for st in students %}\n            <option value="{{ st.id }}" {{ \'selected\' if editing and editing.student_id == st.id }}>\n              {{ st.name }} · Class {{ st.class_name }} · Roll {{ st.roll_no }}\n            </option>\n          {% endfor %}\n        </select>\n      </label>\n      <label>{{ \'New password (leave blank to keep)\' if editing else \'Password *\' }}\n        <input type="password" name="password" {{ \'\' if editing else \'required\' }}>\n      </label>\n      <div class="form-actions">\n        <button class="btn primary" type="submit">\n          {{ \'Update user\' if editing else \'Create user\' }}</button>\n        {% if editing %}<a class="btn ghost" href="{{ url_for(\'users\') }}">Cancel</a>{% endif %}\n      </div>\n    </form>\n  </details>\n</section>\n\n<section class="card">\n  <div class="card-head"><h2>Accounts <span class="pill">{{ users|length }}</span></h2></div>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Students</th>\n                 <th>Exams</th><th>Status</th><th></th></tr></thead>\n      <tbody>\n      {% for u in users %}\n        <tr>\n          <td>{{ u.username }}</td>\n          <td>{{ u.full_name or \'\' }}</td>\n          <td>{% if u.role == \'admin\' %}<span class="tag admin">admin</span>\n              {% else %}user{% endif %}</td>\n          <td class="num">{{ u.n_students }}</td>\n          <td class="num">{{ u.n_exams }}</td>\n          <td>{% if u.active %}<span class="tag ok">active</span>\n              {% else %}<span class="tag bad">disabled</span>{% endif %}</td>\n          <td class="row-actions">\n            <a class="btn ghost small" href="{{ url_for(\'users\', edit=u.id) }}">Edit</a>\n            <form method="post" action="{{ url_for(\'user_toggle\', user_id=u.id) }}">\n              <button class="btn ghost small" type="submit">\n                {{ \'Disable\' if u.active else \'Enable\' }}</button>\n            </form>\n            <form method="post" action="{{ url_for(\'user_delete\', user_id=u.id) }}"\n                  onsubmit="return confirm(\'Delete the account {{ u.username }}?\')">\n              <button class="btn danger small" type="submit">Delete</button>\n            </form>\n          </td>\n        </tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
+    'my_result.html':
+        '{% extends "base.html" %}\n{% block title %}My result{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>My result</h1>\n    <p>{% if student %}{{ student.name }} · Class {{ student.class_name }}{% if student.section %} – {{ student.section }}{% endif %} · Roll {{ student.roll_no }}{% endif %}</p>\n  </div>\n</header>\n\n{% if not student %}\n<section class="card">\n  <p class="muted">This account is not linked to a student record yet.\n     Please ask the school office to link it.</p>\n</section>\n{% else %}\n\n<section class="card">\n  <div class="kv">\n    <div><span>Name</span><strong>{{ student.name }}</strong></div>\n    <div><span>Class</span><strong>{{ student.class_name }}{% if student.section %} – {{ student.section }}{% endif %}</strong></div>\n    <div><span>Roll No</span><strong>{{ student.roll_no }}</strong></div>\n    <div><span>Admission No</span><strong>{{ student.admission_no }}</strong></div>\n  </div>\n</section>\n\n{% if not exams %}\n<section class="card">\n  <p class="muted">No result has been published yet. Please check again later.</p>\n</section>\n{% else %}\n\n<section class="card">\n  <h2 class="card-title">Published results</h2>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Exam</th><th>Class</th><th>Obtained</th><th>Max</th>\n                 <th>%</th><th>Grade</th><th>Result</th><th>Rank</th><th></th></tr></thead>\n      <tbody>\n      {% for item in exams %}\n        <tr>\n          <td>{{ exam_label(item.exam) }}</td>\n          <td>{{ item.exam.class_name }}</td>\n          <td>{{ fmt_num(item.result.obtained) }}</td>\n          <td>{{ fmt_num(item.result.total_max) }}</td>\n          <td>{{ \'%.2f\'|format(item.result.percentage) }}</td>\n          <td>{{ item.result.grade }}</td>\n          <td>{% if item.result.result == \'Pass\' %}<span class="pill ok">Pass</span>{% else %}<span class="pill bad">Fail</span>{% endif %}</td>\n          <td>{{ item.result.rank }}</td>\n          <td><a class="btn ghost small" href="{{ url_for(\'my_result\', exam_id=item.exam.id) }}">Details</a></td>\n        </tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n\n{% if detail %}\n<section class="card">\n  <h2 class="card-title">{{ exam_label(exam) }} — subject-wise marks</h2>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Code</th><th>Subject</th><th>Max</th><th>Pass</th>\n                 <th>Marks</th><th>Result</th><th>Remarks</th></tr></thead>\n      <tbody>\n      {% for d in detail %}\n        <tr>\n          <td>{{ d.subject_code }}</td>\n          <td>{{ d.subject_name }}</td>\n          <td>{{ fmt_num(d.max_marks) }}</td>\n          <td>{{ fmt_num(d.pass_marks) }}</td>\n          <td>{{ fmt_num(d.marks_obtained) }}</td>\n          <td>{% if d.marks_obtained is not none and d.pass_marks is not none and d.marks_obtained < d.pass_marks %}<span class="pill bad">Fail</span>{% else %}<span class="pill ok">Pass</span>{% endif %}</td>\n          <td>{{ d.remarks or \'\' }}</td>\n        </tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endif %}\n{% endif %}\n{% endif %}\n{% endblock %}\n',
+    'attendance.html':
+        '{% extends "base.html" %}\n{% block title %}Attendance{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Attendance</h1><p>Mark the daily register for a class{% if scope %} · your class: {{ scope[0] }}{% if scope[1] %} – {{ scope[1] }}{% endif %}{% endif %}</p></div>\n</header>\n\n<section class="card">\n  <form class="form-grid" method="get">\n    <label>Class\n      <select name="class_name" onchange="this.form.submit()">\n        <option value="">— choose —</option>\n        {% for c in classes %}<option value="{{ c }}" {{ \'selected\' if cls == c }}>{{ c }}</option>{% endfor %}\n      </select>\n    </label>\n    <label>Section\n      <select name="section" onchange="this.form.submit()">\n        <option value="">all</option>\n        {% for s in sections %}<option value="{{ s }}" {{ \'selected\' if sec == s }}>{{ s }}</option>{% endfor %}\n      </select>\n    </label>\n    <label>Date\n      <input type="date" name="att_date" value="{{ day }}" onchange="this.form.submit()">\n    </label>\n    <div class="form-actions"><button class="btn primary" type="submit">Show</button></div>\n  </form>\n</section>\n\n{% if students %}\n<form method="post">\n  <input type="hidden" name="class_name" value="{{ cls }}">\n  <input type="hidden" name="section" value="{{ sec }}">\n  <input type="hidden" name="att_date" value="{{ day }}">\n  <section class="card">\n    <h2 class="card-title">{{ cls }}{% if sec %} – {{ sec }}{% endif %} · {{ disp_date(day) }}</h2>\n    <div class="table-wrap">\n      <table class="grid">\n        <thead><tr><th>Roll</th><th>Name</th><th>Present</th><th>Absent</th>\n                   <th>Late</th><th>Leave</th><th>Remarks</th></tr></thead>\n        <tbody>\n        {% for s in students %}\n          {% set m = marks.get(s.id) %}\n          <tr>\n            <td>{{ s.roll_no }}</td>\n            <td>{{ s.name }}</td>\n            {% for st in statuses %}\n            <td><input type="radio" name="status_{{ s.id }}" value="{{ st }}"\n                 {{ \'checked\' if (m and m.status == st) or (not m and st == \'Present\') }}></td>\n            {% endfor %}\n            <td><input name="remarks_{{ s.id }}" value="{{ m.remarks if m and m.remarks else \'\' }}" placeholder="—"></td>\n          </tr>\n        {% endfor %}\n        </tbody>\n      </table>\n    </div>\n    <div class="form-actions"><button class="btn primary" type="submit">Save attendance</button></div>\n  </section>\n</form>\n{% elif cls %}\n<section class="card"><p class="muted">No active students in this class.</p></section>\n{% endif %}\n{% endblock %}\n',
+    'homework.html':
+        '{% extends "base.html" %}\n{% block title %}Homework{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Homework</h1><p>What each class has to do, and by when</p></div>\n</header>\n\n<section class="card">\n  <h2 class="card-title">Set homework</h2>\n  <form class="form-grid" method="post">\n    <label>Class\n      <select name="class_name" required>\n        <option value="">— choose —</option>\n        {% for c in classes %}<option value="{{ c }}" {{ \'selected\' if scope and scope[0] == c }}>{{ c }}</option>{% endfor %}\n      </select>\n    </label>\n    <label>Section <input name="section" placeholder="A" value="{{ scope[1] if scope else \'\' }}"></label>\n    <label>Subject\n      <select name="subject_id">\n        <option value="">—</option>\n        {% for s in subjects %}<option value="{{ s.id }}">{{ s.subject_code }} · {{ s.subject_name }}</option>{% endfor %}\n      </select>\n    </label>\n    <label>Due date <input type="date" name="due_date"></label>\n    <label class="wide">Title <input name="title" required placeholder="e.g. Exercise 8.2 question 1 to 10"></label>\n    <label class="wide">Details <textarea name="details" rows="2" placeholder="Instructions for the students"></textarea></label>\n    <div class="form-actions"><button class="btn primary" type="submit">Post homework</button></div>\n  </form>\n</section>\n\n<section class="card">\n  <h2 class="card-title">Posted so far</h2>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Class</th><th>Subject</th><th>Title</th><th>Due</th><th>By</th><th></th></tr></thead>\n      <tbody>\n      {% for h in homework %}\n        <tr>\n          <td>{{ h.class_name }}{% if h.section %} – {{ h.section }}{% endif %}</td>\n          <td>{{ h.subject_name or \'—\' }}</td>\n          <td><strong>{{ h.title }}</strong>{% if h.details %}<br><span class="muted">{{ h.details }}</span>{% endif %}</td>\n          <td>{{ disp_date(h.due_date) }}</td>\n          <td>{{ h.author or \'—\' }}</td>\n          <td>\n            <form method="post" action="{{ url_for(\'homework_delete\', hid=h.id) }}">\n              <button class="btn ghost small" type="submit">Delete</button>\n            </form>\n          </td>\n        </tr>\n      {% else %}\n        <tr><td colspan="6" class="muted">Nothing posted yet.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
+    'circulars.html':
+        '{% extends "base.html" %}\n{% block title %}Circulars{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Circulars &amp; notices</h1><p>Everything the school needs to tell parents and students</p></div>\n</header>\n\n<section class="card">\n  <h2 class="card-title">Publish a circular</h2>\n  <form class="form-grid" method="post">\n    <label class="wide">Title <input name="title" required placeholder="e.g. Parent-teacher meeting"></label>\n    <label class="wide">Message <textarea name="body" rows="3" placeholder="Write the notice here"></textarea></label>\n    <label>Audience\n      <select name="audience">\n        <option value="all">Everyone</option>\n        <option value="students">Students</option>\n        <option value="parents">Parents</option>\n        <option value="teachers">Teachers</option>\n      </select>\n    </label>\n    <label>Class <input name="class_name" placeholder="blank = all classes"></label>\n    <label>Section <input name="section" placeholder="blank = all"></label>\n    <label class="check"><input type="checkbox" name="pinned"> Pin to the top</label>\n    <div class="form-actions"><button class="btn primary" type="submit">Publish</button></div>\n  </form>\n</section>\n\n{% for c in circulars %}\n<section class="card">\n  <h2 class="card-title">{% if c.pinned %}📌 {% endif %}{{ c.title }}</h2>\n  <p class="muted">{{ c.posted_on[:10] }} · {{ c.audience }}{% if c.class_name %} · class {{ c.class_name }}{% if c.section %} – {{ c.section }}{% endif %}{% endif %} · {{ c.author or \'office\' }}</p>\n  <p>{{ c.body }}</p>\n  {% if is_admin or (current_user and c.posted_by == current_user.id) %}\n  <form method="post" action="{{ url_for(\'circular_delete\', cid=c.id) }}">\n    <button class="btn ghost small" type="submit">Delete</button>\n  </form>\n  {% endif %}\n</section>\n{% else %}\n<section class="card"><p class="muted">No circulars yet.</p></section>\n{% endfor %}\n{% endblock %}\n',
+    'parents.html':
+        '{% extends "base.html" %}\n{% block title %}Parents{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Parents &amp; guardians</h1><p>Contact details for every family, class by class</p></div>\n</header>\n\n<section class="card">\n  <form class="form-grid" method="get">\n    <label>Class\n      <select name="class_name" onchange="this.form.submit()">\n        <option value="">all classes</option>\n        {% for c in classes %}<option value="{{ c }}" {{ \'selected\' if cls == c }}>{{ c }}</option>{% endfor %}\n      </select>\n    </label>\n    <div class="form-actions"><button class="btn primary" type="submit">Show</button></div>\n  </form>\n</section>\n\n<section class="card">\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Class</th><th>Roll</th><th>Student</th><th>Father</th>\n                 <th>Mother</th><th>Phone</th><th>Email</th></tr></thead>\n      <tbody>\n      {% for s in students %}\n        <tr>\n          <td>{{ s.class_name }}{% if s.section %} – {{ s.section }}{% endif %}</td>\n          <td>{{ s.roll_no }}</td>\n          <td>{{ s.name }}</td>\n          <td>{{ s.father_name or \'—\' }}</td>\n          <td>{{ s.mother_name or \'—\' }}</td>\n          <td>{{ s.phone or \'—\' }}</td>\n          <td>{{ s.email or \'—\' }}</td>\n        </tr>\n      {% else %}\n        <tr><td colspan="7" class="muted">No students yet.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
+    'my_attendance.html':
+        '{% extends "base.html" %}\n{% block title %}My attendance{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>My attendance</h1><p>{{ student.name }} · Class {{ student.class_name }}{% if student.section %} – {{ student.section }}{% endif %}</p></div>\n</header>\n\n<section class="card">\n  <div class="kv">\n    <div><span>Days recorded</span><strong>{{ total }}</strong></div>\n    <div><span>Present</span><strong>{{ present }}</strong></div>\n    <div><span>Attendance</span><strong>{{ pct }}%</strong></div>\n  </div>\n</section>\n\n<section class="card">\n  <h2 class="card-title">Day by day</h2>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Date</th><th>Status</th><th>Remarks</th></tr></thead>\n      <tbody>\n      {% for r in rows %}\n        <tr>\n          <td>{{ disp_date(r.att_date) }}</td>\n          <td>{% if r.status == \'Present\' %}<span class="pill ok">Present</span>\n              {% elif r.status == \'Late\' %}<span class="pill warn">Late</span>\n              {% elif r.status == \'Leave\' %}<span class="pill warn">Leave</span>\n              {% else %}<span class="pill bad">Absent</span>{% endif %}</td>\n          <td>{{ r.remarks or \'\' }}</td>\n        </tr>\n      {% else %}\n        <tr><td colspan="3" class="muted">No attendance recorded yet.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
+    'my_homework.html':
+        '{% extends "base.html" %}\n{% block title %}Homework{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Homework</h1><p>{{ student.name }} · Class {{ student.class_name }}{% if student.section %} – {{ student.section }}{% endif %}</p></div>\n</header>\n\n{% for h in homework %}\n<section class="card">\n  <h2 class="card-title">{{ h.title }}</h2>\n  <p class="muted">{{ h.subject_name or \'General\' }} · due {{ disp_date(h.due_date) or \'—\' }}</p>\n  {% if h.details %}<p>{{ h.details }}</p>{% endif %}\n</section>\n{% else %}\n<section class="card"><p class="muted">No homework has been set for your class yet.</p></section>\n{% endfor %}\n{% endblock %}\n',
+    'notices.html':
+        '{% extends "base.html" %}\n{% block title %}Notices{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Notices</h1><p>Circulars from the school office</p></div>\n</header>\n\n{% for c in circulars %}\n<section class="card">\n  <h2 class="card-title">{% if c.pinned %}📌 {% endif %}{{ c.title }}</h2>\n  <p class="muted">{{ c.posted_on[:10] }}</p>\n  <p>{{ c.body }}</p>\n</section>\n{% else %}\n<section class="card"><p class="muted">No notices at the moment.</p></section>\n{% endfor %}\n{% endblock %}\n',
+    'password.html':
+        '{% extends "base.html" %}\n{% block title %}Change password{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Change password</h1><p>Signed in as {{ current_user.username }}</p></div>\n</header>\n\n<section class="card" style="max-width:520px">\n  <form class="form-grid" method="post">\n    <label class="wide">Current password <input type="password" name="current" required></label>\n    <label class="wide">New password <input type="password" name="new" required minlength="6"></label>\n    <label class="wide">New password again <input type="password" name="again" required minlength="6"></label>\n    <div class="form-actions"><button class="btn primary" type="submit">Change password</button></div>\n  </form>\n</section>\n{% endblock %}\n',
 }
 
-STYLE_CSS = '/* Exam Manager - web edition */\n:root {\n  --bg: #f4f6fb;\n  --white: #ffffff;\n  --ink: #0f172a;\n  --muted: #64748b;\n  --line: #e2e8f0;\n  --soft: #f8fafc;\n  --accent: #4f46e5;\n  --accent-dark: #4338ca;\n  --accent-soft: #eef2ff;\n  --danger: #dc2626;\n  --danger-soft: #fee2e2;\n  --ok: #059669;\n  --ok-soft: #d1fae5;\n  --sidebar: #0f172a;\n}\n* { box-sizing: border-box; }\nbody {\n  margin: 0;\n  background: var(--bg);\n  color: var(--ink);\n  font: 15px/1.5 "Segoe UI", Inter, "Helvetica Neue", system-ui, Arial, sans-serif;\n}\na { color: var(--accent); text-decoration: none; }\na:hover { text-decoration: underline; }\nh1 { font-size: 24px; margin: 0; }\nh2 { font-size: 15px; margin: 0; }\n.muted { color: var(--muted); }\n.num { text-align: right; font-variant-numeric: tabular-nums; }\n\n/* ---------- shell ---------- */\n.shell { display: flex; min-height: 100vh; }\n.sidebar {\n  width: 244px; flex: 0 0 244px; background: var(--sidebar); color: #fff;\n  display: flex; flex-direction: column; padding: 22px 0;\n}\n.brand { display: flex; gap: 12px; align-items: center; padding: 0 20px 18px; }\n.badge {\n  width: 38px; height: 38px; border-radius: 10px; background: var(--accent);\n  display: grid; place-items: center; font-weight: 700; letter-spacing: .5px;\n}\n.brand-text strong { display: block; font-size: 15px; }\n.brand-text span { display: block; font-size: 11px; color: #7c8ba1; }\n.sidebar nav { display: flex; flex-direction: column; padding: 6px 10px; gap: 2px; }\n.sidebar nav a {\n  color: #94a3b8; padding: 10px 14px; border-radius: 8px; font-size: 14px;\n}\n.sidebar nav a:hover { background: #1e293b; color: #e2e8f0; text-decoration: none; }\n.sidebar nav a.active { background: #1e293b; color: #fff; box-shadow: inset 3px 0 0 var(--accent); }\n.sidebar-foot {\n  margin-top: auto; padding: 16px 20px 0; display: flex; flex-direction: column;\n  gap: 6px; font-size: 12px; color: #475569;\n}\n.sidebar-foot a { color: #94a3b8; }\n\nmain { flex: 1; padding: 26px 30px 40px; min-width: 0; }\n\n/* ---------- headers, cards ---------- */\n.page-head {\n  display: flex; justify-content: space-between; align-items: flex-start;\n  gap: 16px; margin-bottom: 18px; flex-wrap: wrap;\n}\n.page-head p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }\n.actions { display: flex; gap: 8px; }\n.card {\n  background: var(--white); border: 1px solid var(--line); border-radius: 12px;\n  padding: 18px; margin-bottom: 16px;\n}\n.card-head {\n  display: flex; justify-content: space-between; align-items: center;\n  gap: 12px; margin-bottom: 12px; flex-wrap: wrap;\n}\n.pill {\n  background: var(--accent-soft); color: var(--accent-dark); border-radius: 999px;\n  padding: 1px 9px; font-size: 12px; font-weight: 600; margin-left: 6px;\n}\n\n/* ---------- stat tiles ---------- */\n.tiles {\n  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));\n  gap: 14px; margin-bottom: 18px;\n}\n.tile {\n  background: var(--white); border: 1px solid var(--line); border-radius: 12px;\n  padding: 16px 18px;\n}\n.tile .bar { display: block; width: 34px; height: 3px; border-radius: 2px; margin-bottom: 10px; }\n.bar.indigo { background: var(--accent); }\n.bar.sky { background: #0ea5e9; }\n.bar.green { background: #10b981; }\n.bar.amber { background: #f59e0b; }\n.tile b { display: block; font-size: 26px; line-height: 1.1; }\n.tile span { color: var(--muted); font-size: 12px; }\n\n.two-col { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; }\n@media (max-width: 1000px) { .two-col { grid-template-columns: 1fr; } }\n\n/* ---------- forms ---------- */\n.form-grid {\n  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));\n  gap: 12px 16px; margin-top: 12px;\n}\n.form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }\n.form-grid .span-2 { grid-column: span 2; }\ninput, select {\n  font: inherit; font-size: 14px; color: var(--ink); background: var(--white);\n  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;\n}\ninput:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }\n.form-actions { display: flex; align-items: end; gap: 8px; }\ndetails summary {\n  cursor: pointer; font-weight: 600; font-size: 14px; color: var(--accent-dark);\n  list-style: none;\n}\ndetails summary::-webkit-details-marker { display: none; }\ndetails summary::before { content: "+ "; font-weight: 700; }\ndetails[open] summary::before { content: "- "; font-weight: 700; }\n\n/* ---------- buttons ---------- */\n.btn {\n  display: inline-block; font: inherit; font-size: 14px; cursor: pointer;\n  border-radius: 8px; padding: 8px 14px; border: 1px solid var(--line);\n  background: var(--white); color: var(--ink); text-decoration: none;\n}\n.btn:hover { background: var(--soft); text-decoration: none; }\n.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }\n.btn.primary:hover { background: var(--accent-dark); }\n.btn.ghost { background: var(--white); }\n.btn.danger { color: var(--danger); border-color: #fecaca; }\n.btn.danger:hover { background: var(--danger-soft); }\n.btn.small { padding: 4px 9px; font-size: 12px; }\n\n/* ---------- tables ---------- */\n.table-wrap { overflow-x: auto; }\ntable.grid { width: 100%; border-collapse: collapse; font-size: 14px; }\ntable.grid th {\n  text-align: left; font-size: 11px; letter-spacing: .04em; text-transform: uppercase;\n  color: var(--muted); background: var(--soft); padding: 9px 10px;\n  border-bottom: 1px solid var(--line); white-space: nowrap;\n}\ntable.grid td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }\ntable.grid tbody tr:nth-child(even) { background: #fcfdff; }\ntable.grid tbody tr:hover { background: var(--accent-soft); }\ntable.grid td.empty { text-align: center; color: var(--muted); padding: 26px; }\n.row-actions { display: flex; gap: 6px; justify-content: flex-end; }\n.row-actions form { display: inline; }\n.mark-input { width: 96px; }\n\n/* ---------- bits ---------- */\n.tag { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600; }\n.tag.ok { background: var(--ok-soft); color: var(--ok); }\n.tag.bad { background: var(--danger-soft); color: var(--danger); }\n.flash {\n  border-radius: 10px; padding: 11px 14px; margin-bottom: 14px; font-size: 14px;\n  border: 1px solid var(--line); background: var(--white);\n}\n.flash.ok { background: var(--ok-soft); border-color: #a7f3d0; color: #065f46; }\n.flash.error { background: var(--danger-soft); border-color: #fecaca; color: #991b1b; }\n.banner {\n  background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;\n  border-radius: 10px; padding: 11px 14px; margin-bottom: 14px; font-size: 13px;\n}\n.info { color: var(--muted); font-size: 13px; margin: 0 0 12px 2px; }\n.search { display: flex; gap: 8px; align-items: center; }\n.search input { min-width: 260px; }\n.login-wrap { display: grid; place-items: center; min-height: 70vh; }\n.card.login { width: 340px; display: flex; flex-direction: column; gap: 12px; }\n.card.login h1 { font-size: 22px; }\n.card.login label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }\n\n/* ---------- small screens ---------- */\n@media (max-width: 820px) {\n  .shell { flex-direction: column; }\n  .sidebar { width: 100%; flex: none; padding: 14px 0; }\n  .sidebar nav { flex-direction: row; overflow-x: auto; gap: 6px; }\n  .sidebar nav a { white-space: nowrap; }\n  .sidebar-foot { flex-direction: row; gap: 14px; padding: 10px 20px 0; }\n  main { padding: 18px 14px 30px; }\n  .form-grid { grid-template-columns: 1fr; }\n  .form-grid .span-2 { grid-column: auto; }\n}\n\n/* ---------- multi-user bits ---------- */\n.banner.admin { background: #eef2ff; border-color: #c7d2fe; color: #3730a3; }\n.tag.admin { background: #eef2ff; color: #4338ca; }\n.sidebar-foot .who {\n  color: #cbd5e1; font-size: 12px; display: flex; gap: 6px; align-items: center;\n  flex-wrap: wrap;\n}\n.sidebar-foot .who em {\n  font-style: normal; background: #1e293b; color: #a5b4fc; border-radius: 999px;\n  padding: 0 7px; font-size: 10px; text-transform: uppercase; letter-spacing: .04em;\n}\n.small { font-size: 12px; }\n.card.login .small { margin: 4px 0 0; }\n\n/* ---------- public landing page ---------- */\n.landing-body { background: #ffffff; }\n.landing-wrap { max-width: 1060px; margin: 0 auto; padding: 0 22px; }\n.landing-nav {\n  position: sticky; top: 0; z-index: 5; background: rgba(255,255,255,.92);\n  backdrop-filter: blur(6px); border-bottom: 1px solid var(--line);\n}\n.nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }\n.brand-inline { display: flex; align-items: center; gap: 10px; font-size: 15px; }\n.brand-inline .badge { width: 32px; height: 32px; font-size: 12px; }\n.landing-nav nav { display: flex; align-items: center; gap: 18px; }\n.landing-nav nav a { color: var(--muted); font-size: 14px; }\n.landing-nav nav a.btn { color: var(--ink); }\n.landing-nav nav a.btn.primary { color: #fff; }\n\n.hero { padding: 74px 0 56px; background:\n  radial-gradient(1000px 380px at 15% -10%, #eef2ff 0%, rgba(255,255,255,0) 70%); }\n.hero .eyebrow {\n  text-transform: uppercase; letter-spacing: .12em; font-size: 11px;\n  color: var(--accent); font-weight: 700; margin: 0 0 12px;\n}\n.hero h1 { font-size: 46px; line-height: 1.05; margin: 0 0 14px; letter-spacing: -.02em; }\n.hero .lead { font-size: 17px; color: var(--muted); max-width: 640px; margin: 0 0 26px; }\n.hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }\n.hero .tiny { font-size: 12px; margin: 0; }\n\n.landing-section { padding: 54px 0; border-top: 1px solid var(--line); }\n.landing-section.alt { background: var(--soft); }\n.landing-section h2, .landing-cta h2 { font-size: 26px; margin: 0 0 22px; }\n.feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }\n.feature { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 18px; }\n.feature h3 { font-size: 15px; margin: 0 0 6px; }\n.feature p { margin: 0; color: var(--muted); font-size: 14px; }\n.steps { margin: 0 0 16px; padding-left: 20px; color: var(--ink); }\n.steps li { margin: 8px 0; }\n.landing-cta { padding: 56px 0; text-align: center; border-top: 1px solid var(--line); }\n.landing-cta p { color: var(--muted); margin: 0 0 18px; }\n.landing-foot { border-top: 1px solid var(--line); padding: 22px 0; }\n.landing-foot .landing-wrap { display: flex; justify-content: space-between; gap: 14px;\n  flex-wrap: wrap; font-size: 12px; color: var(--muted); }\n@media (max-width: 720px) {\n  .hero h1 { font-size: 34px; }\n  .landing-nav nav a:not(.btn) { display: none; }\n}\n'
+STYLE_CSS = '/* Exam Manager - web edition */\n:root {\n  --bg: #f4f6fb;\n  --white: #ffffff;\n  --ink: #0f172a;\n  --muted: #64748b;\n  --line: #e2e8f0;\n  --soft: #f8fafc;\n  --accent: #4f46e5;\n  --accent-dark: #4338ca;\n  --accent-soft: #eef2ff;\n  --danger: #dc2626;\n  --danger-soft: #fee2e2;\n  --ok: #059669;\n  --ok-soft: #d1fae5;\n  --sidebar: #0f172a;\n}\n* { box-sizing: border-box; }\nbody {\n  margin: 0;\n  background: var(--bg);\n  color: var(--ink);\n  font: 15px/1.5 "Segoe UI", Inter, "Helvetica Neue", system-ui, Arial, sans-serif;\n}\na { color: var(--accent); text-decoration: none; }\na:hover { text-decoration: underline; }\nh1 { font-size: 24px; margin: 0; }\nh2 { font-size: 15px; margin: 0; }\n.muted { color: var(--muted); }\n.num { text-align: right; font-variant-numeric: tabular-nums; }\n\n/* ---------- shell ---------- */\n.shell { display: flex; min-height: 100vh; }\n.sidebar {\n  width: 244px; flex: 0 0 244px; background: var(--sidebar); color: #fff;\n  display: flex; flex-direction: column; padding: 22px 0;\n}\n.brand { display: flex; gap: 12px; align-items: center; padding: 0 20px 18px; }\n.badge {\n  width: 38px; height: 38px; border-radius: 10px; background: var(--accent);\n  display: grid; place-items: center; font-weight: 700; letter-spacing: .5px;\n}\n.brand-text strong { display: block; font-size: 15px; }\n.brand-text span { display: block; font-size: 11px; color: #7c8ba1; }\n.sidebar nav { display: flex; flex-direction: column; padding: 6px 10px; gap: 2px; }\n.sidebar nav a {\n  color: #94a3b8; padding: 10px 14px; border-radius: 8px; font-size: 14px;\n}\n.sidebar nav a:hover { background: #1e293b; color: #e2e8f0; text-decoration: none; }\n.sidebar nav a.active { background: #1e293b; color: #fff; box-shadow: inset 3px 0 0 var(--accent); }\n.sidebar-foot {\n  margin-top: auto; padding: 16px 20px 0; display: flex; flex-direction: column;\n  gap: 6px; font-size: 12px; color: #475569;\n}\n.sidebar-foot a { color: #94a3b8; }\n\nmain { flex: 1; padding: 26px 30px 40px; min-width: 0; }\n\n/* ---------- headers, cards ---------- */\n.page-head {\n  display: flex; justify-content: space-between; align-items: flex-start;\n  gap: 16px; margin-bottom: 18px; flex-wrap: wrap;\n}\n.page-head p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }\n.actions { display: flex; gap: 8px; }\n.card {\n  background: var(--white); border: 1px solid var(--line); border-radius: 12px;\n  padding: 18px; margin-bottom: 16px;\n}\n.card-head {\n  display: flex; justify-content: space-between; align-items: center;\n  gap: 12px; margin-bottom: 12px; flex-wrap: wrap;\n}\n.pill {\n  background: var(--accent-soft); color: var(--accent-dark); border-radius: 999px;\n  padding: 1px 9px; font-size: 12px; font-weight: 600; margin-left: 6px;\n}\n\n/* ---------- stat tiles ---------- */\n.tiles {\n  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));\n  gap: 14px; margin-bottom: 18px;\n}\n.tile {\n  background: var(--white); border: 1px solid var(--line); border-radius: 12px;\n  padding: 16px 18px;\n}\n.tile .bar { display: block; width: 34px; height: 3px; border-radius: 2px; margin-bottom: 10px; }\n.bar.indigo { background: var(--accent); }\n.bar.sky { background: #0ea5e9; }\n.bar.green { background: #10b981; }\n.bar.amber { background: #f59e0b; }\n.tile b { display: block; font-size: 26px; line-height: 1.1; }\n.tile span { color: var(--muted); font-size: 12px; }\n\n.two-col { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; }\n@media (max-width: 1000px) { .two-col { grid-template-columns: 1fr; } }\n\n/* ---------- forms ---------- */\n.form-grid {\n  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));\n  gap: 12px 16px; margin-top: 12px;\n}\n.form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }\n.form-grid .span-2 { grid-column: span 2; }\ninput, select {\n  font: inherit; font-size: 14px; color: var(--ink); background: var(--white);\n  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;\n}\ninput:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }\n.form-actions { display: flex; align-items: end; gap: 8px; }\ndetails summary {\n  cursor: pointer; font-weight: 600; font-size: 14px; color: var(--accent-dark);\n  list-style: none;\n}\ndetails summary::-webkit-details-marker { display: none; }\ndetails summary::before { content: "+ "; font-weight: 700; }\ndetails[open] summary::before { content: "- "; font-weight: 700; }\n\n/* ---------- buttons ---------- */\n.btn {\n  display: inline-block; font: inherit; font-size: 14px; cursor: pointer;\n  border-radius: 8px; padding: 8px 14px; border: 1px solid var(--line);\n  background: var(--white); color: var(--ink); text-decoration: none;\n}\n.btn:hover { background: var(--soft); text-decoration: none; }\n.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }\n.btn.primary:hover { background: var(--accent-dark); }\n.btn.ghost { background: var(--white); }\n.btn.danger { color: var(--danger); border-color: #fecaca; }\n.btn.danger:hover { background: var(--danger-soft); }\n.btn.small { padding: 4px 9px; font-size: 12px; }\n\n/* ---------- tables ---------- */\n.table-wrap { overflow-x: auto; }\ntable.grid { width: 100%; border-collapse: collapse; font-size: 14px; }\ntable.grid th {\n  text-align: left; font-size: 11px; letter-spacing: .04em; text-transform: uppercase;\n  color: var(--muted); background: var(--soft); padding: 9px 10px;\n  border-bottom: 1px solid var(--line); white-space: nowrap;\n}\ntable.grid td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }\ntable.grid tbody tr:nth-child(even) { background: #fcfdff; }\ntable.grid tbody tr:hover { background: var(--accent-soft); }\ntable.grid td.empty { text-align: center; color: var(--muted); padding: 26px; }\n.row-actions { display: flex; gap: 6px; justify-content: flex-end; }\n.row-actions form { display: inline; }\n.mark-input { width: 96px; }\n\n/* ---------- bits ---------- */\n.tag { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600; }\n.tag.ok { background: var(--ok-soft); color: var(--ok); }\n.tag.bad { background: var(--danger-soft); color: var(--danger); }\n.flash {\n  border-radius: 10px; padding: 11px 14px; margin-bottom: 14px; font-size: 14px;\n  border: 1px solid var(--line); background: var(--white);\n}\n.flash.ok { background: var(--ok-soft); border-color: #a7f3d0; color: #065f46; }\n.flash.error { background: var(--danger-soft); border-color: #fecaca; color: #991b1b; }\n.banner {\n  background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;\n  border-radius: 10px; padding: 11px 14px; margin-bottom: 14px; font-size: 13px;\n}\n.info { color: var(--muted); font-size: 13px; margin: 0 0 12px 2px; }\n.search { display: flex; gap: 8px; align-items: center; }\n.search input { min-width: 260px; }\n.login-wrap { display: grid; place-items: center; min-height: 70vh; }\n.card.login { width: 340px; display: flex; flex-direction: column; gap: 12px; }\n.card.login h1 { font-size: 22px; }\n.card.login label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }\n\n/* ---------- small screens ---------- */\n@media (max-width: 820px) {\n  .shell { flex-direction: column; }\n  .sidebar { width: 100%; flex: none; padding: 14px 0; }\n  .sidebar nav { flex-direction: row; overflow-x: auto; gap: 6px; }\n  .sidebar nav a { white-space: nowrap; }\n  .sidebar-foot { flex-direction: row; gap: 14px; padding: 10px 20px 0; }\n  main { padding: 18px 14px 30px; }\n  .form-grid { grid-template-columns: 1fr; }\n  .form-grid .span-2 { grid-column: auto; }\n}\n\n/* ---------- multi-user bits ---------- */\n.banner.admin { background: #eef2ff; border-color: #c7d2fe; color: #3730a3; }\n.tag.admin { background: #eef2ff; color: #4338ca; }\n.sidebar-foot .who {\n  color: #cbd5e1; font-size: 12px; display: flex; gap: 6px; align-items: center;\n  flex-wrap: wrap;\n}\n.sidebar-foot .who em {\n  font-style: normal; background: #1e293b; color: #a5b4fc; border-radius: 999px;\n  padding: 0 7px; font-size: 10px; text-transform: uppercase; letter-spacing: .04em;\n}\n.small { font-size: 12px; }\n.card.login .small { margin: 4px 0 0; }\n\n/* ---------- public landing page ---------- */\n.landing-body { background: #ffffff; }\n.landing-wrap { max-width: 1060px; margin: 0 auto; padding: 0 22px; }\n.landing-nav {\n  position: sticky; top: 0; z-index: 5; background: rgba(255,255,255,.92);\n  backdrop-filter: blur(6px); border-bottom: 1px solid var(--line);\n}\n.nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }\n.brand-inline { display: flex; align-items: center; gap: 10px; font-size: 15px; }\n.brand-inline .badge { width: 32px; height: 32px; font-size: 12px; }\n.landing-nav nav { display: flex; align-items: center; gap: 18px; }\n.landing-nav nav a { color: var(--muted); font-size: 14px; }\n.landing-nav nav a.btn { color: var(--ink); }\n.landing-nav nav a.btn.primary { color: #fff; }\n\n.hero { padding: 74px 0 56px; background:\n  radial-gradient(1000px 380px at 15% -10%, #eef2ff 0%, rgba(255,255,255,0) 70%); }\n.hero .eyebrow {\n  text-transform: uppercase; letter-spacing: .12em; font-size: 11px;\n  color: var(--accent); font-weight: 700; margin: 0 0 12px;\n}\n.hero h1 { font-size: 46px; line-height: 1.05; margin: 0 0 14px; letter-spacing: -.02em; }\n.hero .lead { font-size: 17px; color: var(--muted); max-width: 640px; margin: 0 0 26px; }\n.hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }\n.hero .tiny { font-size: 12px; margin: 0; }\n\n.landing-section { padding: 54px 0; border-top: 1px solid var(--line); }\n.landing-section.alt { background: var(--soft); }\n.landing-section h2, .landing-cta h2 { font-size: 26px; margin: 0 0 22px; }\n.feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }\n.feature { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 18px; }\n.feature h3 { font-size: 15px; margin: 0 0 6px; }\n.feature p { margin: 0; color: var(--muted); font-size: 14px; }\n.steps { margin: 0 0 16px; padding-left: 20px; color: var(--ink); }\n.steps li { margin: 8px 0; }\n.landing-cta { padding: 56px 0; text-align: center; border-top: 1px solid var(--line); }\n.landing-cta p { color: var(--muted); margin: 0 0 18px; }\n.landing-foot { border-top: 1px solid var(--line); padding: 22px 0; }\n.landing-foot .landing-wrap { display: flex; justify-content: space-between; gap: 14px;\n  flex-wrap: wrap; font-size: 12px; color: var(--muted); }\n@media (max-width: 720px) {\n  .hero h1 { font-size: 34px; }\n  .landing-nav nav a:not(.btn) { display: none; }\n}\n\n/* ---------- student result page ---------- */\n.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }\n.kv div { display: flex; flex-direction: column; gap: 2px; }\n.kv span { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }\n.kv strong { font-size: 15px; }\n.card-title { font-size: 14px; margin: 0 0 12px; }\n.pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }\n.pill.ok { background: var(--ok-soft); color: var(--ok); }\n.pill.bad { background: var(--danger-soft); color: var(--danger); }\n.btn.small { padding: 4px 10px; font-size: 12px; }\n\n.pill.warn { background: var(--warn-soft, #fef3c7); color: var(--warn, #b45309); }\n.form-grid .wide { grid-column: 1 / -1; }\n.form-grid .check { flex-direction: row; align-items: center; gap: 8px; }\n.form-grid textarea { font-family: inherit; font-size: 14px; }\n'
 
 ICON_PNG_B64 = ('iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAAHdUlEQVR4nO3dvY5lRxmF4RrkIbdEBCkESNwBkZMJbEsEyAkSIfdA5MAJJL4FIgsRGgkCJoCIq3AMFiDZGUl7aKKWWz3dffY++6e+qvU8oT14qo3Xu+uc/pnWAAAAAACAOb3ofYAz/OzVP257n4Ex/fH1D6beyFQfnKFzllnCMPwHYfT0NnIMhjy40VPVaDEY5rBGz2hGiEH5Axo+o6scgrIHM3xmUzEE5Q5k+MyuUgjKHMTwSVMhBN/pfYDWjJ9MFf6771qgCv8CoIJet4FuNwDjh2/12kOXABg/vK3HLk69dhg+LHPWS4LTbgDGD8udtZdTAmD8sN4Zuzk8AMYP1zt6P4cGwPhhuyN3dFgAjB/2c9SeDgmA8cP+jtjV7gEwfjjO3vvaNQDGD8fbc2clvhkI6GO3AHj6w3n22tsuATB+ON8eu9scAOOHfrbuz3sAEGxTADz9ob8tO7w6AMYPdVy7Ry8BINhVAfD0h3qu2aUbAARbHQBPf6hr7T7dACDYqgB4+kN9a3bqBgDBFgfA0x/GsXSvbgAQTAAg2KIAuP7DeJbs1g0AggkABLsYANd/GNel/boBQDABgGDPBsD1H8b33I7dACCYAEAwAYBgAgDBBACCPRkAnwGAeTy1ZzcACCYAEEwAIJgAQDABgGACAMEEAIIJAAQTAAj2Tu8DpPjxT77bfvPp93ofYxj/+feb9qtf/qv3MabnBgDBBACCCQAEEwAIJgAQTAAgmABAMAGAYAIAwQQAggkABBMACCYAEEwAIJgAQDABgGACAMEEAIIJAAQTAAjmh4JO6ubmtn304Ze9j0FxbgAQTAAgmABAMAGAYAIAwQQAggkABBMACCYAEEwAIJgAQDABgGACAMEEAIIJAAQTAAgmABBMACCYAEAwAYBgfijopF6+fNE+/8v3ex9jtZ+//8/25k3vU+RwA4BgAgDBBACCCQAEEwAIJgAQTAAgmABAMAGAYAIAwQQAggkABBMACCYAEEwAIJgAQDABgGACAMEEAIIJAATzQ0EndXNz2z768Mvex6A4NwAIJgAQTAAgmABAMAGAYAIAwQQAgj35dQDf3Pz3zHNM7803/zv99/T/IZe4AUAwAYBgAgDBBACCCQAEEwAIJgAQTAAgmABAMAGAYAIAwQQAggkABBMACCYAEEwAIJg/GGRSL1++aH/66w97H2Ozz373VfvDZ1/1Psa03AAgmABAMAGAYAIAwQQAggkABBMACCYAEEwAIJgAQDABgGACAMEEAIIJAAQTAAgmABDMDwSBe/7+698v/rU//e0vDjzJOQSAaGsGf+l/O2IQBIBIW4Z/6Z85UggEgChHDP+p32OEELx46m988N4Xt2ceBI50xvCfUiUEf/7bj97au88CML2e46/w+z/HSwCmVWl4VV8WuAEwpUrjv6/auQSA6VQb2UOVzicATKXSuJ5T5ZwCwDSqjGqpCucVAKZQYUzX6H1uAYBgAsDwej9Fn/P1q48v/pqe5xcAhjbC+CtHQADgAA9HvyQCPQgAw6r69H9q7Jci0OPjEQA40devPi51GxAAhjTa03/przv74xIA2MnaJ3uFm4AAMJyKT/9rxvzu608e/etnfnwCABvtOf6zCQBsMPL4WxMAiCYADKXS6/8jn/5nfZwCQJS93nkf/ep/RwCIseZr85f8c9aoOP7WBIAQe31t/kzjb+2ZADz2M8RhRNd+bf7WX99anfE/tWc3AKZ2abRbv3R3dALAtHqPu8rT/zkCwJT2vN6PfPW/RACYzp5v8M08/tYEgAltGeD9wc8+/tYuBMBnAhjV1gjMNP7nduwGwFDW/OGaZw5y79/rrD9EVACYWtWnchUXA+BlAKM7OgKVI3Npv24ARDhqpJXHv4QAMJxrXx/vPdajxn/W6//WFgbAywBmsddoR3jyL9mtGwBD2vKU3DreI8d/5tO/NQEg1AhP8DMsDoCXAVSz9Wl5TQRGefov3asbANHWDHrGW8OqALgFUM0eT80lwz56/D2e/q25ATCBPSPwcOjvvv5kqPGvddUT/YP3vrjd+yCwRaUfF75Wr6d/a24ATKLnU3SL3ue+KgDeC6Ci3mNaa+/zXrNLNwCmMkoEqpzz6gC4BVBVlXE95YjzXbvHTTcAEaCqqhGoNP7WWntnz4NAJXdjq/AZgqpB2vwegFsA1fUe35G//9b97TZeXxvACM68DRwdnj0evrs+vUWAURwZgjNuHHvdvL0HQKQj3h/o/VLjGru/fncLYGRrgtBr8Hu+73bIG3giAMfY+033Q74S0GcGYH9H7OqwLwUWAdjPUXs69HsBRAC2O3JHh38zkAjA9Y7ezynfDSgCsN4Zuznt24FFAJY7ay9dRunThPC4sx+UXX4giNsAvK3HLrr9RCARgG/12kOJEXpJQKreD8ISPxOw978E6KHCf/fdD/CQ2wCzqzD8O2UO8pAQMJtKw79T7kAPCQGjqzj8O2UP9pAQMJrKw79T/oCPEQOqGmH09w112MeIAb2NNvr7hj34Y8SAs4w8+vum+CAuEQauNcvQAQAAAIBQ/wc5QDYHbNuaaAAAAABJRU5ErkJggg==')
 
@@ -202,12 +220,49 @@ def exam_label(row):
 #  database
 # --------------------------------------------------------------------------
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS attendance (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id  INTEGER NOT NULL,
+    class_name  TEXT,
+    section     TEXT,
+    att_date    TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'Present',
+    remarks     TEXT,
+    marked_by   INTEGER,
+    UNIQUE(student_id, att_date)
+);
+
+CREATE TABLE IF NOT EXISTS homework (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    class_name  TEXT,
+    section     TEXT,
+    subject_id  INTEGER,
+    title       TEXT NOT NULL,
+    details     TEXT,
+    due_date    TEXT,
+    created_by  INTEGER,
+    created_at  TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS circulars (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    title       TEXT NOT NULL,
+    body        TEXT,
+    audience    TEXT DEFAULT 'all',
+    class_name  TEXT,
+    section     TEXT,
+    pinned      INTEGER DEFAULT 0,
+    posted_by   INTEGER,
+    posted_on   TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     username      TEXT NOT NULL UNIQUE,
     full_name     TEXT,
     password_hash TEXT NOT NULL,
     role          TEXT NOT NULL DEFAULT 'user',
+    student_id    INTEGER,
     active        INTEGER NOT NULL DEFAULT 1,
     created_at    TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -288,6 +343,15 @@ def _migrate(conn):
         if "owner_id" not in _columns(conn, table):
             conn.execute(f"ALTER TABLE {table} ADD COLUMN owner_id INTEGER")
 
+    # a student account points at one row of the students table
+    if "student_id" not in _columns(conn, "users"):
+        conn.execute("ALTER TABLE users ADD COLUMN student_id INTEGER")
+
+    # a teacher can be the class teacher of one class / section
+    for col in ("class_name", "section"):
+        if col not in _columns(conn, "users"):
+            conn.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT")
+
     if conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
         username = ADMIN_USERNAME
         password = ADMIN_PASSWORD
@@ -320,6 +384,14 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.executescript(SCHEMA)
     _migrate(conn)
+    # anything an admin created belongs to the school, not to the admin
+    admin_ids = [r[0] for r in conn.execute(
+        "SELECT id FROM users WHERE role='admin'")]
+    if admin_ids:
+        marks = ",".join("?" * len(admin_ids))
+        for table in ("students", "exams", "subjects"):
+            conn.execute(f"UPDATE {table} SET owner_id=NULL "
+                         f"WHERE owner_id IN ({marks})", admin_ids)
     conn.commit()
     conn.close()
 
@@ -433,6 +505,14 @@ def load_user():
         return None
     if g.user is None:
         return redirect(url_for("login", next=request.path))
+    if is_student():
+        # a student account is read-only: one page, no forms, no writes
+        if request.endpoint not in ("my_result", "my_attendance", "my_homework",
+                                    "notices", "password", "logout"):
+            return redirect(url_for("my_result"))
+        if request.method not in ("GET", "HEAD") and request.endpoint != "password":
+            flash("A student account can only view results.", "error")
+            return redirect(url_for("my_result"))
     return None
 
 
@@ -445,19 +525,62 @@ def is_admin():
     return bool(user) and user["role"] == "admin"
 
 
+def is_student():
+    user = getattr(g, "user", None)
+    return bool(user) and user["role"] == "student"
+
+
+def my_class():
+    """(class_name, section) a teacher is responsible for, or None."""
+    user = getattr(g, "user", None)
+    if not user or user["role"] != "user":
+        return None
+    if not user["class_name"]:
+        return None
+    return (user["class_name"], user["section"] or "")
+
+
+def class_scope():
+    """The classes this user may work with (None means every class)."""
+    if is_admin():
+        return None
+    return my_class()
+
+
+def my_student():
+    """The students row that belongs to the logged-in student account."""
+    user = getattr(g, "user", None)
+    if not user or user["role"] != "student" or not user["student_id"]:
+        return None
+    return query("SELECT * FROM students WHERE id=?", (user["student_id"],),
+                 one=True)
+
+
+def owner_value():
+    """Rows an admin creates belong to the school (NULL = shared).
+
+    A teacher's rows carry their own id, so they stay private to them.
+    """
+    return None if is_admin() else uid()
+
+
 def owned_where(extra="", params=()):
-    """WHERE fragment that keeps each user's records private."""
+    """WHERE fragment: your own rows plus the school-wide ones."""
     clauses, args = [], list(params)
     if extra:
         clauses.append(extra)
     if not is_admin():
-        clauses.append("owner_id=?")
+        clauses.append("(owner_id=? OR owner_id IS NULL)")
         args.append(uid() or 0)
     return (" WHERE " + " AND ".join(clauses)) if clauses else "", args
 
 
 def owns(table, row_id):
-    """The row, if the current user is allowed to touch it; else None."""
+    """The row, if the current user may EDIT or DELETE it; else None.
+
+    School-wide rows (owner_id NULL) are managed by the admin, so a teacher
+    can read them but not change them.
+    """
     if not row_id:
         return None
     row = query(f"SELECT * FROM {table} WHERE id=?", (row_id,), one=True)
@@ -466,6 +589,18 @@ def owns(table, row_id):
     if is_admin():
         return row
     return row if row["owner_id"] == uid() else None
+
+
+def visible(table, row_id):
+    """The row, if the current user may READ it (own or school-wide)."""
+    if not row_id:
+        return None
+    row = query(f"SELECT * FROM {table} WHERE id=?", (row_id,), one=True)
+    if row is None:
+        return None
+    if is_admin() or row["owner_id"] is None or row["owner_id"] == uid():
+        return row
+    return None
 
 
 @app.context_processor
@@ -488,6 +623,8 @@ def login():
                 and check_password_hash(user["password_hash"], password)):
             session.clear()
             session["uid"] = user["id"]
+            if user["role"] == "student":
+                return redirect(url_for("my_result"))
             return redirect(request.args.get("next") or url_for("dashboard"))
         flash("Wrong username or password.", "error")
     return render_template("login.html")
@@ -523,7 +660,8 @@ def dashboard():
     else:
         papers = query("""SELECT COUNT(*) c FROM exam_schedule sc
                           JOIN exams e ON e.id = sc.exam_id
-                          WHERE e.owner_id=?""", (uid(),), one=True)["c"]
+                          WHERE (e.owner_id=? OR e.owner_id IS NULL)""",
+                       (uid(),), one=True)["c"]
     stats = {
         "students": query("SELECT COUNT(*) c FROM students" + sw, sa, one=True)["c"],
         "exams": query("SELECT COUNT(*) c FROM exams" + ew, ea, one=True)["c"],
@@ -560,8 +698,12 @@ def students():
 
     edit_id = request.args.get("edit", type=int)
     editing = owns("students", edit_id) if edit_id else None
-    owners = ({u["id"]: u["username"] for u in query("SELECT id, username FROM users")}
-              if is_admin() else {})
+    owners = {None: "School"}
+    if is_admin():
+        owners.update({u["id"]: u["username"]
+                       for u in query("SELECT id, username FROM users")})
+    else:
+        owners[uid()] = "You"
     return render_template("students.html", students=rows, q=term,
                            classes=classes, disp_date=disp_date,
                            genders=GENDERS, sections=SECTIONS,
@@ -623,7 +765,7 @@ def student_save():
         execute("""INSERT INTO students (owner_id, admission_no, roll_no, name,
                    class_name, section, dob, gender, father_name, mother_name,
                    phone, email, address, admission_date, status)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (uid(),) + values)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (owner_value(),) + values)
         flash(f"Student '{name}' added.", "ok")
     return redirect(url_for("students"))
 
@@ -669,9 +811,12 @@ def exams():
     rows = query("SELECT * FROM exams" + where + " ORDER BY id DESC", args)
     edit_id = request.args.get("edit", type=int)
     editing = owns("exams", edit_id) if edit_id else None
-    owners = ({u["id"]: u["username"]
-               for u in query("SELECT id, username FROM users")}
-              if is_admin() else {})
+    owners = {None: "School"}
+    if is_admin():
+        owners.update({u["id"]: u["username"]
+                       for u in query("SELECT id, username FROM users")})
+    else:
+        owners[uid()] = "You"
     return render_template("exams.html", exams=rows, disp_date=disp_date,
                            exam_types=EXAM_TYPES, statuses=EXAM_STATUS,
                            editing=editing, owners=owners)
@@ -720,7 +865,7 @@ def exam_save():
         execute("""INSERT INTO exams (owner_id, exam_name, exam_type,
                    academic_year, class_name, start_date, end_date, status,
                    remarks) VALUES (?,?,?,?,?,?,?,?,?)""",
-                (uid(), etype, etype, year, cls, sd, ed,
+                (owner_value(), etype, etype, year, cls, sd, ed,
                  f.get("status") or "Scheduled", f.get("remarks", "").strip()))
         flash(f"Exam '{etype}' saved.", "ok")
     return redirect(url_for("exams"))
@@ -746,9 +891,12 @@ def subjects():
     rows = query("SELECT * FROM subjects" + where + " ORDER BY subject_code", args)
     edit_id = request.args.get("edit", type=int)
     editing = owns("subjects", edit_id) if edit_id else None
-    owners = ({u["id"]: u["username"]
-               for u in query("SELECT id, username FROM users")}
-              if is_admin() else {})
+    owners = {None: "School"}
+    if is_admin():
+        owners.update({u["id"]: u["username"]
+                       for u in query("SELECT id, username FROM users")})
+    else:
+        owners[uid()] = "You"
     return render_template("subjects.html", subjects=rows, editing=editing,
                            owners=owners)
 
@@ -778,7 +926,7 @@ def subject_save():
         flash(f"Subject '{name}' updated.", "ok")
     else:
         execute("INSERT INTO subjects (owner_id, subject_code, subject_name,"
-                " class_name) VALUES (?,?,?,?)", (uid(), code, name, cls))
+                " class_name) VALUES (?,?,?,?)", (owner_value(), code, name, cls))
         flash(f"Subject '{name}' added.", "ok")
     return redirect(url_for("subjects"))
 
@@ -804,7 +952,7 @@ def subject_defaults():
         dwhere, dargs = owned_where("subject_code=?", (code,))
         if not query("SELECT id FROM subjects" + dwhere, dargs, one=True):
             execute("INSERT INTO subjects (owner_id, subject_code, subject_name)"
-                    " VALUES (?,?,?)", (uid(), code, name))
+                    " VALUES (?,?,?)", (owner_value(), code, name))
             added += 1
     flash(f"{added} default subject(s) added.", "ok")
     return redirect(url_for("subjects"))
@@ -820,7 +968,7 @@ def schedule():
     sw, sa = owned_where()
     subjects_rows = query("SELECT * FROM subjects" + sw +
                           " ORDER BY subject_code", sa)
-    scope_sql = "" if is_admin() else " WHERE e.owner_id=?"
+    scope_sql = "" if is_admin() else " WHERE (e.owner_id=? OR e.owner_id IS NULL)"
     scope_args = () if is_admin() else (uid(),)
     rows = query("""SELECT sc.*, e.exam_name, e.exam_type, e.academic_year,
                            e.class_name, s.subject_name
@@ -843,11 +991,11 @@ def schedule_save():
         flash("Select both an exam and a subject.", "error")
         return redirect(url_for("schedule"))
     exam_id, subject_id = int(exam_id), int(subject_id)
-    if owns("exams", exam_id) is None:
-        flash("You can only schedule papers for your own exams.", "error")
+    if visible("exams", exam_id) is None:
+        flash("That exam is not available to you.", "error")
         return redirect(url_for("schedule"))
-    if owns("subjects", subject_id) is None:
-        flash("You can only use your own subjects.", "error")
+    if visible("subjects", subject_id) is None:
+        flash("That subject is not available to you.", "error")
         return redirect(url_for("schedule"))
 
     ed = norm_date(f.get("exam_date"))
@@ -901,6 +1049,17 @@ def schedule_delete(pid):
 # --------------------------------------------------------------------------
 #  marks
 # --------------------------------------------------------------------------
+def _sheet_where(exam):
+    """Which students belong on the marks sheet of this exam.
+
+    A school-wide exam (owner_id NULL) shows every student the user may see;
+    a teacher's own exam shows only that teacher's students.
+    """
+    cls = (exam["class_name"] or "").strip()
+    if exam["owner_id"] is None:
+        return owned_where("status='Active' AND class_name=?", (cls,))
+    return (" WHERE status='Active' AND class_name=? AND owner_id=?",
+            (cls, exam["owner_id"]))
 @app.route("/marks", methods=["GET", "POST"])
 def marks():
     ew, ea = owned_where()
@@ -916,7 +1075,7 @@ def marks():
         exam_id, subject_id = int(exam_id), int(subject_id)
         sched = query("SELECT * FROM exam_schedule WHERE exam_id=? AND"
                       " subject_id=?", (exam_id, subject_id), one=True)
-        exam = owns("exams", exam_id)
+        exam = visible("exams", exam_id)
         if exam is None:
             flash("That exam does not belong to you.", "error")
             return redirect(url_for("marks"))
@@ -924,10 +1083,8 @@ def marks():
         if request.method == "POST" and sched:
             saved = 0
             max_marks = float(sched["max_marks"] or 100)
-            for st in query("SELECT id FROM students WHERE class_name=?"
-                            " AND owner_id=?",
-                            ((exam["class_name"] or "").strip(),
-                             exam["owner_id"])):
+            for st in query("SELECT id FROM students"
+                            + _sheet_where(exam)[0], _sheet_where(exam)[1]):
                 raw = request.form.get(f"marks_{st['id']}", "").strip()
                 remark = request.form.get(f"remarks_{st['id']}", "").strip()
                 if raw == "":
@@ -960,11 +1117,10 @@ def marks():
             max_marks = float(sched["max_marks"] or 100)
             pass_marks = float(sched["pass_marks"] or 33)
             ctx = {"max_marks": max_marks, "pass_marks": pass_marks}
-            rows = query("SELECT * FROM students WHERE status='Active'"
-                         " AND class_name=? AND owner_id=?"
-                         " ORDER BY CAST(roll_no AS INTEGER), roll_no",
-                         ((exam["class_name"] or "").strip(),
-                          exam["owner_id"]))
+            rows = query("SELECT * FROM students"
+                         + _sheet_where(exam)[0]
+                         + " ORDER BY CAST(roll_no AS INTEGER), roll_no",
+                         _sheet_where(exam)[1])
             for st in rows:
                 m = query("SELECT * FROM marks WHERE exam_id=? AND student_id=?"
                           " AND subject_id=?", (exam_id, st["id"], subject_id),
@@ -992,7 +1148,7 @@ def results():
     rows, info, exam = [], "", None
 
     if exam_id:
-        exam = owns("exams", int(exam_id))
+        exam = visible("exams", int(exam_id))
         if exam is None:
             flash("That exam does not belong to you.", "error")
             return redirect(url_for("results"))
@@ -1024,7 +1180,7 @@ def results_csv():
     if not exam_id:
         flash("Pick an exam first.", "error")
         return redirect(url_for("results"))
-    exam = owns("exams", exam_id)
+    exam = visible("exams", exam_id)
     if exam is None:
         flash("That exam does not belong to you.", "error")
         return redirect(url_for("results"))
@@ -1043,6 +1199,468 @@ def results_csv():
     return Response("\ufeff" + out.getvalue(), mimetype="text/csv",
                     headers={"Content-Disposition":
                              f"attachment; filename={name}"})
+
+
+
+# --------------------------------------------------------------------------
+#  attendance
+# --------------------------------------------------------------------------
+ATT_STATUS = ("Present", "Absent", "Late", "Leave")
+
+
+@app.route("/attendance", methods=["GET", "POST"])
+def attendance():
+    scope = class_scope()
+    today = datetime.now().strftime("%Y-%m-%d")
+    cls = (request.values.get("class_name") or (scope[0] if scope else "")).strip()
+    sec = (request.values.get("section") or (scope[1] if scope else "")).strip()
+    day = norm_date(request.values.get("att_date")) or today
+
+    if scope and cls and cls != scope[0]:
+        flash("You can only mark attendance for your own class.", "error")
+        return redirect(url_for("attendance"))
+
+    rows = []
+    if cls:
+        where = " WHERE status='Active' AND class_name=?"
+        args = [cls]
+        if sec:
+            where += " AND IFNULL(section,'')=?"
+            args.append(sec)
+        rows = query("SELECT * FROM students" + where +
+                     " ORDER BY CAST(roll_no AS INTEGER), roll_no", args)
+
+    if request.method == "POST" and rows:
+        saved = 0
+        for st in rows:
+            value = request.form.get(f"status_{st['id']}", "").strip()
+            if value not in ATT_STATUS:
+                continue
+            remark = request.form.get(f"remarks_{st['id']}", "").strip()
+            existing = query("SELECT id FROM attendance WHERE student_id=? AND"
+                             " att_date=?", (st["id"], day), one=True)
+            if existing:
+                execute("UPDATE attendance SET status=?, remarks=?, marked_by=?"
+                        " WHERE id=?", (value, remark, uid(), existing["id"]))
+            else:
+                execute("""INSERT INTO attendance (student_id, class_name,
+                           section, att_date, status, remarks, marked_by)
+                           VALUES (?,?,?,?,?,?,?)""",
+                        (st["id"], cls, sec, day, value, remark, uid()))
+            saved += 1
+        flash(f"Attendance saved for {saved} student(s) on {disp_date(day)}.", "ok")
+        return redirect(url_for("attendance", class_name=cls, section=sec,
+                                att_date=day))
+
+    marks = {}
+    if rows:
+        ids = ",".join("?" * len(rows))
+        for a in query(f"SELECT * FROM attendance WHERE att_date=? AND"
+                       f" student_id IN ({ids})", [day] + [r["id"] for r in rows]):
+            marks[a["student_id"]] = a
+
+    classes = sorted({r["class_name"] for r in query(
+        "SELECT DISTINCT class_name FROM students WHERE class_name<>''")})
+    sections = sorted({r["section"] for r in query(
+        "SELECT DISTINCT section FROM students WHERE IFNULL(section,'')<>''")})
+    return render_template("attendance.html", students=rows, marks=marks,
+                           cls=cls, sec=sec, day=day, today=today,
+                           classes=classes, sections=sections,
+                           statuses=ATT_STATUS, scope=scope, disp_date=disp_date)
+
+
+# --------------------------------------------------------------------------
+#  homework
+# --------------------------------------------------------------------------
+@app.route("/homework", methods=["GET", "POST"])
+def homework():
+    scope = class_scope()
+    if request.method == "POST":
+        cls = (request.form.get("class_name") or "").strip()
+        title = (request.form.get("title") or "").strip()
+        if scope and cls != scope[0]:
+            flash("You can only set homework for your own class.", "error")
+            return redirect(url_for("homework"))
+        if not cls or not title:
+            flash("Class and title are required.", "error")
+            return redirect(url_for("homework"))
+        execute("""INSERT INTO homework (class_name, section, subject_id, title,
+                   details, due_date, created_by) VALUES (?,?,?,?,?,?,?)""",
+                (cls, (request.form.get("section") or "").strip(),
+                 request.form.get("subject_id") or None, title,
+                 (request.form.get("details") or "").strip(),
+                 norm_date(request.form.get("due_date")), uid()))
+        flash("Homework posted.", "ok")
+        return redirect(url_for("homework"))
+
+    where, args = "", []
+    if scope:
+        where, args = " WHERE h.class_name=?", [scope[0]]
+    rows = query("""SELECT h.*, s.subject_name, u.username AS author
+                    FROM homework h
+                    LEFT JOIN subjects s ON s.id = h.subject_id
+                    LEFT JOIN users u ON u.id = h.created_by""" + where +
+                 " ORDER BY h.id DESC LIMIT 100", args)
+    subjects = query("SELECT * FROM subjects ORDER BY subject_code")
+    classes = sorted({r["class_name"] for r in query(
+        "SELECT DISTINCT class_name FROM students WHERE class_name<>''")})
+    return render_template("homework.html", homework=rows, subjects=subjects,
+                           classes=classes, scope=scope, disp_date=disp_date)
+
+
+@app.route("/homework/<int:hid>/delete", methods=["POST"])
+def homework_delete(hid):
+    row = query("SELECT * FROM homework WHERE id=?", (hid,), one=True)
+    if row is None or (not is_admin() and row["created_by"] != uid()):
+        flash("You can only delete homework you posted.", "error")
+        return redirect(url_for("homework"))
+    execute("DELETE FROM homework WHERE id=?", (hid,))
+    flash("Homework removed.", "ok")
+    return redirect(url_for("homework"))
+
+
+# --------------------------------------------------------------------------
+#  circulars / notices
+# --------------------------------------------------------------------------
+@app.route("/circulars", methods=["GET", "POST"])
+def circulars():
+    if request.method == "POST":
+        title = (request.form.get("title") or "").strip()
+        if not title:
+            flash("A title is required.", "error")
+            return redirect(url_for("circulars"))
+        execute("""INSERT INTO circulars (title, body, audience, class_name,
+                   section, pinned, posted_by) VALUES (?,?,?,?,?,?,?)""",
+                (title, (request.form.get("body") or "").strip(),
+                 request.form.get("audience") or "all",
+                 (request.form.get("class_name") or "").strip(),
+                 (request.form.get("section") or "").strip(),
+                 1 if request.form.get("pinned") else 0, uid()))
+        flash("Circular published.", "ok")
+        return redirect(url_for("circulars"))
+    rows = query("""SELECT c.*, u.username AS author FROM circulars c
+                    LEFT JOIN users u ON u.id = c.posted_by
+                    ORDER BY c.pinned DESC, c.id DESC LIMIT 100""")
+    return render_template("circulars.html", circulars=rows, is_admin=is_admin())
+
+
+@app.route("/circulars/<int:cid>/delete", methods=["POST"])
+def circular_delete(cid):
+    row = query("SELECT * FROM circulars WHERE id=?", (cid,), one=True)
+    if row is None or (not is_admin() and row["posted_by"] != uid()):
+        flash("You can only delete your own circulars.", "error")
+        return redirect(url_for("circulars"))
+    execute("DELETE FROM circulars WHERE id=?", (cid,))
+    flash("Circular removed.", "ok")
+    return redirect(url_for("circulars"))
+
+
+# --------------------------------------------------------------------------
+#  parents / guardians
+# --------------------------------------------------------------------------
+@app.route("/parents")
+def parents():
+    scope = class_scope()
+    cls = (request.args.get("class_name") or (scope[0] if scope else "")).strip()
+    where, args = " WHERE status='Active'", []
+    if cls:
+        where += " AND class_name=?"
+        args.append(cls)
+    rows = query("SELECT * FROM students" + where +
+                 " ORDER BY class_name, CAST(roll_no AS INTEGER), roll_no", args)
+    classes = sorted({r["class_name"] for r in query(
+        "SELECT DISTINCT class_name FROM students WHERE class_name<>''")})
+    return render_template("parents.html", students=rows, cls=cls,
+                           classes=classes)
+
+
+# --------------------------------------------------------------------------
+#  a student's own pages (read only)
+# --------------------------------------------------------------------------
+@app.route("/my-attendance")
+def my_attendance():
+    if not is_student():
+        return redirect(url_for("dashboard"))
+    student = my_student()
+    if student is None:
+        return redirect(url_for("my_result"))
+    rows = query("SELECT * FROM attendance WHERE student_id=?"
+                 " ORDER BY att_date DESC LIMIT 120", (student["id"],))
+    total = len(rows)
+    present = sum(1 for r in rows if r["status"] in ("Present", "Late"))
+    pct = round(present / total * 100, 1) if total else 0
+    return render_template("my_attendance.html", student=student, rows=rows,
+                           total=total, present=present, pct=pct,
+                           disp_date=disp_date)
+
+
+@app.route("/my-homework")
+def my_homework():
+    if not is_student():
+        return redirect(url_for("dashboard"))
+    student = my_student()
+    if student is None:
+        return redirect(url_for("my_result"))
+    rows = query("""SELECT h.*, s.subject_name FROM homework h
+                    LEFT JOIN subjects s ON s.id = h.subject_id
+                    WHERE h.class_name=?
+                      AND (IFNULL(h.section,'')='' OR IFNULL(h.section,'')=?)
+                    ORDER BY h.id DESC LIMIT 100""",
+                 ((student["class_name"] or "").strip(),
+                  (student["section"] or "").strip()))
+    return render_template("my_homework.html", student=student, homework=rows,
+                           disp_date=disp_date)
+
+
+@app.route("/notices")
+def notices():
+    if is_student():
+        student = my_student()
+        if student is None:
+            return redirect(url_for("my_result"))
+        rows = query("""SELECT * FROM circulars
+                        WHERE audience IN ('all','students')
+                          AND (IFNULL(class_name,'')='' OR class_name=?)
+                        ORDER BY pinned DESC, id DESC LIMIT 100""",
+                     ((student["class_name"] or "").strip(),))
+        return render_template("notices.html", circulars=rows, student=student)
+    if getattr(g, "user", None) is None:
+        return redirect(url_for("login"))
+    return redirect(url_for("circulars"))
+
+
+# --------------------------------------------------------------------------
+#  change your own password
+# --------------------------------------------------------------------------
+@app.route("/password", methods=["GET", "POST"])
+def password():
+    if request.method == "POST":
+        current = request.form.get("current", "")
+        new = request.form.get("new", "")
+        again = request.form.get("again", "")
+        if not check_password_hash(g.user["password_hash"], current):
+            flash("Your current password is wrong.", "error")
+        elif len(new) < 6:
+            flash("The new password must be at least 6 characters.", "error")
+        elif new != again:
+            flash("The two new passwords do not match.", "error")
+        else:
+            execute("UPDATE users SET password_hash=? WHERE id=?",
+                    (generate_password_hash(new), uid()))
+            flash("Password changed.", "ok")
+            return redirect(url_for("my_result") if is_student()
+                            else url_for("dashboard"))
+    return render_template("password.html")
+
+
+# --------------------------------------------------------------------------
+#  demo data for a school trial
+# --------------------------------------------------------------------------
+@app.route("/demo/seed", methods=["POST"])
+def demo_seed():
+    if not is_admin():
+        flash("Only an admin can load the demo data.", "error")
+        return redirect(url_for("dashboard"))
+    added = seed_demo()
+    flash(added, "ok")
+    return redirect(url_for("dashboard"))
+
+
+# --------------------------------------------------------------------------
+#  demo data: ten students, parents, attendance, homework and notices
+# --------------------------------------------------------------------------
+DEMO_NAMES = [
+    ("Aarav Sharma", "Rajesh Sharma", "Sunita Sharma", "M"),
+    ("Diya Patel", "Manoj Patel", "Kavita Patel", "F"),
+    ("Kabir Rao", "Suresh Rao", "Anita Rao", "M"),
+    ("Meera Nair", "Anil Nair", "Latha Nair", "F"),
+    ("Rohan Gupta", "Vikas Gupta", "Rekha Gupta", "M"),
+    ("Sana Khan", "Imran Khan", "Shabana Khan", "F"),
+    ("Ishaan Verma", "Deepak Verma", "Pooja Verma", "M"),
+    ("Ananya Singh", "Rakesh Singh", "Neha Singh", "F"),
+    ("Vivaan Joshi", "Mahesh Joshi", "Seema Joshi", "M"),
+    ("Tara Menon", "Suresh Menon", "Divya Menon", "F"),
+]
+
+
+def seed_demo():
+    """Create a ready-to-show school: 10 students with parents and history."""
+    if query("SELECT id FROM students WHERE admission_no='DEMO01'", one=True):
+        return ("Demo data is already loaded (10 students of class 8-A).")
+
+    subjects = {}
+    for code, name, mx, ps in (("ENG", "English", 50, 17),
+                               ("HIN", "Hindi", 50, 17),
+                               ("MAT", "Mathematics", 100, 33),
+                               ("SCI", "Science", 80, 26),
+                               ("SST", "Social Science", 80, 26)):
+        row = query("SELECT id FROM subjects WHERE subject_code=?", (code,),
+                    one=True)
+        if row:
+            subjects[code] = row["id"]
+        else:
+            subjects[code] = execute(
+                "INSERT INTO subjects (owner_id, subject_code, subject_name,"
+                " class_name) VALUES (NULL,?,?,?)", (code, name, "8"))
+
+    # ---- students ----
+    ids = []
+    for i, (name, father, mother, gender) in enumerate(DEMO_NAMES, start=1):
+        sid = execute("""INSERT INTO students (owner_id, admission_no, roll_no,
+                       name, class_name, section, dob, gender, father_name,
+                       mother_name, phone, email, address, admission_date,
+                       status) VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                      (f"DEMO{i:02d}", str(i), name, "8", "A",
+                       f"{2012 - (i % 3)}-0{(i % 9) + 1}-1{i % 9}",
+                       "Male" if gender == "M" else "Female",
+                       father, mother, f"98{i:08d}",
+                       f"{name.split()[0].lower()}.parent@example.com",
+                       f"{i}, Green Park, New Delhi", "2026-04-01", "Active"))
+        ids.append(sid)
+
+    # ---- one exam with marks ----
+    exam_id = query("SELECT id FROM exams WHERE exam_type='Mid Term' AND"
+                    " class_name='8'", one=True)
+    if exam_id:
+        exam_id = exam_id["id"]
+    else:
+        exam_id = execute("""INSERT INTO exams (owner_id, exam_name, exam_type,
+                            academic_year, class_name, start_date, end_date,
+                            status) VALUES (NULL,?,?,?,?,?,?,?)""",
+                          ("Mid Term", "Mid Term", "2026-27", "8",
+                           "2026-11-10", "2026-11-18", "Completed"))
+    for code, mx, ps in (("ENG", 50, 17), ("HIN", 50, 17), ("MAT", 100, 33),
+                         ("SCI", 80, 26), ("SST", 80, 26)):
+        if not query("SELECT id FROM exam_schedule WHERE exam_id=? AND"
+                     " subject_id=?", (exam_id, subjects[code]), one=True):
+            execute("""INSERT INTO exam_schedule (exam_id, subject_id, exam_date,
+                       start_time, duration, max_marks, pass_marks)
+                       VALUES (?,?,?,?,?,?,?)""",
+                    (exam_id, subjects[code], "2026-11-10", "09:00", 180, mx, ps))
+
+    base = {"ENG": 0.86, "HIN": 0.78, "MAT": 0.72, "SCI": 0.80, "SST": 0.75}
+    for idx, sid in enumerate(ids):
+        for code, mx, _ps in (("ENG", 50, 17), ("HIN", 50, 17), ("MAT", 100, 33),
+                              ("SCI", 80, 26), ("SST", 80, 26)):
+            factor = base[code] - idx * 0.035
+            got = max(12, round(mx * factor))
+            execute("""INSERT INTO marks (exam_id, student_id, subject_id,
+                       marks_obtained, remarks) VALUES (?,?,?,?,?)""",
+                    (exam_id, sid, subjects[code], got, ""))
+
+    # ---- attendance for the last ten days ----
+    day = datetime.now()
+    made = 0
+    for back in range(10):
+        d = day - timedelta(days=back)
+        if d.weekday() == 6:                       # Sunday
+            continue
+        stamp = d.strftime("%Y-%m-%d")
+        for idx, sid in enumerate(ids):
+            if (idx + back) % 9 == 0:
+                status = "Absent"
+            elif (idx + back) % 11 == 0:
+                status = "Late"
+            else:
+                status = "Present"
+            execute("""INSERT OR IGNORE INTO attendance (student_id, class_name,
+                       section, att_date, status, marked_by)
+                       VALUES (?,?,?,?,?,?)""",
+                    (sid, "8", "A", stamp, status, uid()))
+            made += 1
+
+    # ---- homework and circulars ----
+    for code, title, details, due in (
+            ("MAT", "Exercise 8.2 — question 1 to 10",
+             "Show all steps. Write in the maths register.", "2026-11-05"),
+            ("SCI", "Chapter 6 — Combustion and Flame",
+             "Read the chapter and answer the back exercises.", "2026-11-06"),
+            ("ENG", "Letter to the editor",
+             "150 words on water wastage in your locality.", "2026-11-07"),
+            ("SST", "Map work — physical divisions of India",
+             "Mark the ranges and plateaus on the outline map.", "2026-11-08")):
+        execute("""INSERT INTO homework (class_name, section, subject_id, title,
+                   details, due_date, created_by) VALUES (?,?,?,?,?,?,?)""",
+                ("8", "A", subjects[code], title, details, due, uid()))
+
+    for title, body, pinned in (
+            ("Parent-teacher meeting",
+             "The PTM for class 8 will be held on Saturday, 15 November 2026, "
+             "from 9:00 am to 12:30 pm in the respective classrooms. "
+             "Parents are requested to attend with the report card.", 1),
+            ("Annual sports day",
+             "Trials for the annual sports day begin next week during the games "
+             "period. Bring your house T-shirt and sports shoes.", 0),
+            ("Winter uniform",
+             "Winter uniform is compulsory from 1 December. Navy blazer and "
+             "grey trousers / skirt as per the school diary.", 0)):
+        execute("""INSERT INTO circulars (title, body, audience, pinned,
+                   posted_by) VALUES (?,?,?,?,?)""",
+                (title, body, "all", pinned, uid()))
+
+    # ---- two teachers, one of them the class teacher of 8-A ----
+    for username, full, cls, sec in (("teacher1", "Rakesh Kr. Singh", "8", "A"),
+                                     ("teacher2", "Ranjana Sharma", "8", "B")):
+        if not query("SELECT id FROM users WHERE username=?", (username,),
+                     one=True):
+            execute("""INSERT INTO users (username, full_name, password_hash,
+                       role, class_name, section) VALUES (?,?,?,?,?,?)""",
+                    (username, full, generate_password_hash("school1234"),
+                     "user", cls, sec))
+
+    return (f"Demo school created: 10 students of class 8-A with parents, "
+            f"{made} attendance rows, one exam with marks, 4 homework entries, "
+            f"3 circulars and 2 teacher accounts (teacher1 / teacher2, "
+            f"password school1234).")
+
+# --------------------------------------------------------------------------
+#  a student's own result
+# --------------------------------------------------------------------------
+@app.route("/my-result")
+def my_result():
+    """What a student account sees: only their own marks and result."""
+    if not is_student():
+        return redirect(url_for("dashboard"))
+    student = my_student()
+    if student is None:
+        flash("This account is not linked to a student record. "
+              "Ask the school office to fix it.", "error")
+        return render_template("my_result.html", student=None, exams=[],
+                               detail=None, exam=None)
+
+    exam_rows = query("""SELECT DISTINCT e.* FROM marks m
+                         JOIN exams e ON e.id = m.exam_id
+                         WHERE m.student_id=?
+                         ORDER BY e.id DESC""", (student["id"],))
+
+    summary = []
+    for e in exam_rows:
+        rows = compute_results(e["id"], (e["class_name"] or "").strip())
+        mine = next((r for r in rows if r["student_id"] == student["id"]), None)
+        if mine:
+            summary.append({"exam": e, "result": mine})
+
+    detail, exam = None, None
+    exam_id = request.args.get("exam_id", type=int)
+    if exam_id:
+        exam = next((item["exam"] for item in summary
+                     if item["exam"]["id"] == exam_id), None)
+        if exam:
+            detail = query("""SELECT s.subject_name, s.subject_code,
+                                     sc.max_marks, sc.pass_marks,
+                                     m.marks_obtained, m.remarks
+                              FROM marks m
+                              JOIN subjects s ON s.id = m.subject_id
+                              LEFT JOIN exam_schedule sc
+                                     ON sc.exam_id = m.exam_id
+                                    AND sc.subject_id = m.subject_id
+                              WHERE m.exam_id=? AND m.student_id=?
+                              ORDER BY s.subject_code""",
+                           (exam_id, student["id"]))
+
+    return render_template("my_result.html", student=student, exams=summary,
+                           detail=detail, exam=exam, exam_label=exam_label,
+                           fmt_num=fmt_num)
 
 
 # --------------------------------------------------------------------------
@@ -1069,7 +1687,10 @@ def users():
     edit_id = request.args.get("edit", type=int)
     editing = query("SELECT * FROM users WHERE id=?", (edit_id,),
                     one=True) if edit_id else None
-    return render_template("users.html", users=rows, editing=editing)
+    students = query("SELECT id, name, class_name, roll_no FROM students"
+                     " ORDER BY class_name, CAST(roll_no AS INTEGER), roll_no")
+    return render_template("users.html", users=rows, editing=editing,
+                           students=students)
 
 
 @app.route("/users/save", methods=["POST"])
@@ -1083,8 +1704,16 @@ def user_save():
     full_name = f.get("full_name", "").strip()
     role = f.get("role", "user")
     password = f.get("password", "")
-    if role not in ("admin", "user"):
+    if role not in ("admin", "user", "student"):
         role = "user"
+    student_id = f.get("student_id") or ""
+    if role != "student":
+        student_id = None
+    elif not student_id:
+        flash("Pick the student this account belongs to.", "error")
+        return redirect(url_for("users"))
+    else:
+        student_id = int(student_id)
     if not username:
         flash("A username is required.", "error")
         return redirect(url_for("users"))
@@ -1101,21 +1730,29 @@ def user_save():
     if user_id:
         if password:
             execute("UPDATE users SET username=?, full_name=?, role=?,"
+                    " student_id=?, class_name=?, section=?,"
                     " password_hash=? WHERE id=?",
-                    (username, full_name, role,
+                    (username, full_name, role, student_id,
+                     (f.get("class_name") or "").strip(),
+                     (f.get("section") or "").strip(),
                      generate_password_hash(password), int(user_id)))
         else:
-            execute("UPDATE users SET username=?, full_name=?, role=? WHERE id=?",
-                    (username, full_name, role, int(user_id)))
+            execute("UPDATE users SET username=?, full_name=?, role=?,"
+                    " student_id=?, class_name=?, section=? WHERE id=?",
+                    (username, full_name, role, student_id,
+                     (f.get("class_name") or "").strip(),
+                     (f.get("section") or "").strip(), int(user_id)))
         flash(f"User '{username}' updated.", "ok")
     else:
         if len(password) < 4:
             flash("Give the new user a password of at least 4 characters.",
                   "error")
             return redirect(url_for("users"))
-        execute("INSERT INTO users (username, full_name, password_hash, role)"
-                " VALUES (?,?,?,?)",
-                (username, full_name, generate_password_hash(password), role))
+        execute("INSERT INTO users (username, full_name, password_hash, role,"
+                " student_id, class_name, section) VALUES (?,?,?,?,?,?,?)",
+                (username, full_name, generate_password_hash(password), role,
+                 student_id, (f.get("class_name") or "").strip(),
+                 (f.get("section") or "").strip()))
         flash(f"User '{username}' created.", "ok")
     return redirect(url_for("users"))
 
@@ -1168,7 +1805,10 @@ def user_delete(user_id):
 REQUIRED_TEMPLATES = ("welcome.html", "base.html", "dashboard.html",
                       "students.html", "exams.html", "subjects.html",
                       "schedule.html", "marks.html", "results.html",
-                      "login.html", "users.html")
+                      "login.html", "users.html", "my_result.html", "attendance.html",
+                      "homework.html", "circulars.html", "parents.html",
+                      "my_attendance.html", "my_homework.html", "notices.html",
+                      "password.html")
 
 ERROR_PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
