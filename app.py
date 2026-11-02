@@ -69,7 +69,7 @@ TEMPLATES = {
     'welcome.html':
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>Exam Script 2 — Examination Management Software for Schools</title>\n<meta name="description" content="Exam Script 2 is a school examination management app: student admission records, exam scheduling, marks entry and result sheets with grades and rank. Works in any browser, no installation.">\n<meta name="keywords" content="Exam Script 2, examination management software, school exam software, marks entry, result sheet, report card software India">\n<meta property="og:title" content="Exam Script 2 — Examination Management for Schools">\n<meta property="og:description" content="Students, exams, exam schedule, marks entry and results with grades and rank — in one browser app.">\n<meta property="og:type" content="website">\n<link rel="stylesheet" href="{{ url_for(\'static\', filename=\'style.css\') }}">\n<link rel="icon" href="{{ url_for(\'static\', filename=\'icon.png\') }}">\n<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "SoftwareApplication",\n  "name": "Exam Script 2",\n  "applicationCategory": "BusinessApplication",\n  "operatingSystem": "Any (web browser)",\n  "description": "School examination management: student records, exam schedule, marks entry and result sheets with percentage, grades and rank.",\n  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "INR"}\n}\n</script>\n</head>\n<body class="landing-body">\n\n<header class="landing-nav">\n  <div class="landing-wrap nav-inner">\n    <div class="brand-inline">\n      <div class="badge">EX</div>\n      <strong>Exam Script 2</strong>\n    </div>\n    <nav>\n      <a href="#features">Features</a>\n      <a href="#how">How it works</a>\n      <a class="btn primary small" href="{{ url_for(\'login\') }}">Staff login</a>\n    </nav>\n  </div>\n</header>\n\n<section class="hero">\n  <div class="landing-wrap">\n    <p class="eyebrow">Examination management, simplified</p>\n    <h1>Exam Script 2</h1>\n    <p class="lead">\n      One place for a school\'s whole examination cycle — student admission\n      records, the exam schedule, marks entry, and result sheets with\n      percentage, grades and rank. Runs in the browser, nothing to install.\n    </p>\n    <div class="hero-actions">\n      <a class="btn primary" href="{{ url_for(\'login\') }}">Staff login</a>\n      <a class="btn ghost" href="#features">See what it does</a>\n    </div>\n    <p class="tiny muted">Access is by account only — every teacher sees their own\n      class data, and an admin sees the whole school.</p>\n  </div>\n</section>\n\n<section id="features" class="landing-section">\n  <div class="landing-wrap">\n    <h2>What it does</h2>\n    <div class="feature-grid">\n      <article class="feature">\n        <h3>Students</h3>\n        <p>Admission number, roll number, class, section, date of admission,\n           parents\' details, phone and email. Search, edit and export to CSV.</p>\n      </article>\n      <article class="feature">\n        <h3>Exams</h3>\n        <p>Create exams by type — unit test, mid term, half yearly, annual,\n           pre-board, practical — for a class and academic year.</p>\n      </article>\n      <article class="feature">\n        <h3>Exam schedule</h3>\n        <p>One paper per subject with date, start time, duration, hall,\n           invigilator, maximum marks and pass marks.</p>\n      </article>\n      <article class="feature">\n        <h3>Marks entry</h3>\n        <p>Pick an exam and subject, fill the whole sheet in one screen.\n           Out-of-range entries are refused automatically.</p>\n      </article>\n      <article class="feature">\n        <h3>Results</h3>\n        <p>Total, percentage, CBSE-style grade, failed subjects, pass or fail,\n           and rank — with ties handled. Export the result sheet to CSV.</p>\n      </article>\n      <article class="feature">\n        <h3>Accounts</h3>\n        <p>Each teacher logs in with their own username and password and sees\n           only their own records. One admin account oversees everything.</p>\n      </article>\n    </div>\n  </div>\n</section>\n\n<section id="how" class="landing-section alt">\n  <div class="landing-wrap">\n    <h2>How it works</h2>\n    <ol class="steps">\n      <li><strong>Create the subjects</strong> for a class — or load a standard set.</li>\n      <li><strong>Add the students</strong> with their admission details.</li>\n      <li><strong>Create the exam</strong> and schedule one paper per subject.</li>\n      <li><strong>Enter the marks</strong> subject by subject.</li>\n      <li><strong>Generate the results</strong> and export the sheet.</li>\n    </ol>\n    <p class="muted">Built for schools that want something simple and offline-friendly\n      instead of a heavyweight ERP.</p>\n  </div>\n</section>\n\n<section class="landing-cta">\n  <div class="landing-wrap">\n    <h2>Already have an account?</h2>\n    <p>Sign in to open your dashboard.</p>\n    <a class="btn primary" href="{{ url_for(\'login\') }}">Staff login</a>\n  </div>\n</section>\n\n<footer class="landing-foot">\n  <div class="landing-wrap">\n    <span>Exam Script 2 · examination management for schools</span>\n    <span class="muted">Data stays on the school\'s own server · no advertising, no tracking</span>\n  </div>\n</footer>\n\n</body>\n</html>\n',
     'base.html':
-        '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<meta name="robots" content="noindex, nofollow">\n<link rel="manifest" href="{{ url_for(\'manifest\') }}">\n  <title>{% block title %}Dashboard{% endblock %} · {{ school_name }}</title>\n<link rel="stylesheet" href="{{ url_for(\'static\', filename=\'style.css\') }}">\n<link rel="icon" href="{{ url_for(\'static\', filename=\'icon.png\') }}">\n</head>\n<body>\n<div class="shell">\n  <aside class="sidebar">\n    <div class="brand">\n      <div class="badge">EX</div>\n      <div class="brand-text">\n        <strong>Exam Manager</strong>\n        <span>{{ school_name }}</span>\n      </div>\n    </div>\n    <nav>\n      {% if current_user and current_user.role == \'student\' %}\n      <a href="{{ url_for(\'my_home\') }}" class="{{ \'active\' if request.endpoint == \'my_home\' }}">Home</a>\n      <a href="{{ url_for(\'my_result\') }}" class="{{ \'active\' if request.endpoint == \'my_result\' }}">My result</a>\n      <a href="{{ url_for(\'my_attendance\') }}" class="{{ \'active\' if request.endpoint == \'my_attendance\' }}">My attendance</a>\n      <a href="{{ url_for(\'my_homework\') }}" class="{{ \'active\' if request.endpoint == \'my_homework\' }}">Homework</a>\n      <a href="{{ url_for(\'my_timetable\') }}" class="{{ \'active\' if request.endpoint == \'my_timetable\' }}">Timetable</a>\n      <a href="{{ url_for(\'my_fees\') }}" class="{{ \'active\' if request.endpoint == \'my_fees\' }}">My fees</a>\n      <a href="{{ url_for(\'my_transport\') }}" class="{{ \'active\' if request.endpoint == \'my_transport\' }}">My transport</a>\n      <a href="{{ url_for(\'my_library\') }}" class="{{ \'active\' if request.endpoint == \'my_library\' }}">Library</a>\n      <a href="{{ url_for(\'notices\') }}" class="{{ \'active\' if request.endpoint == \'notices\' }}">Notices</a>\n      <a href="{{ url_for(\'password\') }}" class="{{ \'active\' if request.endpoint == \'password\' }}">Password</a>\n      {% else %}\n      <a href="{{ url_for(\'dashboard\') }}" class="{{ \'active\' if request.endpoint == \'dashboard\' }}">Dashboard</a>\n      <a href="{{ url_for(\'students\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'student\') }}">Students</a>\n      <a href="{{ url_for(\'exams\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'exam\') }}">Exams</a>\n      <a href="{{ url_for(\'subjects\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'subject\') }}">Subjects</a>\n      <a href="{{ url_for(\'schedule\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'schedule\') }}">Exam schedule</a>\n      <a href="{{ url_for(\'attendance\') }}" class="{{ \'active\' if request.endpoint == \'attendance\' }}">Attendance</a>\n      <a href="{{ url_for(\'timetable\') }}" class="{{ \'active\' if request.endpoint == \'timetable\' }}">Timetable</a>\n      <a href="{{ url_for(\'homework\') }}" class="{{ \'active\' if request.endpoint == \'homework\' }}">Homework</a>\n      <a href="{{ url_for(\'marks\') }}" class="{{ \'active\' if request.endpoint == \'marks\' }}">Marks entry</a>\n      <a href="{{ url_for(\'results\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'results\') }}">Results</a>\n      <a href="{{ url_for(\'fees\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'fee\') }}">Fees</a>\n      <a href="{{ url_for(\'parents\') }}" class="{{ \'active\' if request.endpoint == \'parents\' }}">Parents</a>\n      <a href="{{ url_for(\'circulars\') }}" class="{{ \'active\' if request.endpoint == \'circulars\' }}">Circulars</a>\n      <a href="{{ url_for(\'events\') }}" class="{{ \'active\' if request.endpoint == \'events\' }}">Calendar</a>\n      <a href="{{ url_for(\'polls\') }}" class="{{ \'active\' if request.endpoint == \'polls\' }}">Polls</a>\n      <a href="{{ url_for(\'library\') }}" class="{{ \'active\' if request.endpoint == \'library\' }}">Library</a>\n      <a href="{{ url_for(\'transport\') }}" class="{{ \'active\' if request.endpoint == \'transport\' }}">Transport</a>\n      <a href="{{ url_for(\'admissions\') }}" class="{{ \'active\' if request.endpoint == \'admissions\' }}">Admissions</a>\n      {% if is_admin %}\n      <a href="{{ url_for(\'staff\') }}" class="{{ \'active\' if request.endpoint == \'staff\' }}">Staff</a>\n      <a href="{{ url_for(\'payroll\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'payroll\') }}">Payroll</a>\n      {% endif %}\n      <a href="{{ url_for(\'hostel\') }}" class="{{ \'active\' if request.endpoint == \'hostel\' }}">Hostel</a>\n      <a href="{{ url_for(\'inventory\') }}" class="{{ \'active\' if request.endpoint == \'inventory\' }}">Store</a>\n      <a href="{{ url_for(\'certificates\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'certificate\') }}">Certificates</a>\n      <a href="{{ url_for(\'notifications\') }}" class="{{ \'active\' if request.endpoint == \'notifications\' }}">Messages</a>\n      {% if is_admin %}\n      <a href="{{ url_for(\'users\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'user\') }}">Users</a>\n      {% endif %}\n      {% endif %}\n    </nav>\n    <div class="sidebar-foot">\n      {% if current_user %}\n      <span class="who">{{ current_user.full_name or current_user.username }}\n        <em>{{ current_user.role }}</em></span>\n      {% if current_user.role != \'student\' %}\n      <a href="{{ url_for(\'password\') }}">Change password</a>\n      {% endif %}\n      <a href="{{ url_for(\'logout\') }}">Log out</a>\n      {% endif %}\n      <span>{{ \'Cloud · Turso\' if cloud_db else \'SQLite\' }} · v3.2</span>\n    </div>\n  </aside>\n\n  <main>\n    {% if is_admin %}\n    <div class="banner admin">Admin mode — you can see and edit every user\'s data.</div>\n    {% endif %}\n    {% with messages = get_flashed_messages(with_categories=true) %}\n      {% for category, message in messages %}\n        <div class="flash {{ category }}">{{ message }}</div>\n      {% endfor %}\n    {% endwith %}\n    {% block content %}{% endblock %}\n  </main>\n</div>\n</body>\n</html>\n',
+        '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<meta name="robots" content="noindex, nofollow">\n<link rel="manifest" href="{{ url_for(\'manifest\') }}">\n  <title>{% block title %}Dashboard{% endblock %} · {{ school_name }}</title>\n<link rel="stylesheet" href="{{ url_for(\'static\', filename=\'style.css\') }}">\n<link rel="icon" href="{{ url_for(\'static\', filename=\'icon.png\') }}">\n</head>\n<body>\n<div class="shell">\n  <aside class="sidebar">\n    <div class="brand">\n      <div class="badge">EX</div>\n      <div class="brand-text">\n        <strong>Exam Manager</strong>\n        <span>{{ school_name }}</span>\n      </div>\n    </div>\n    <nav>\n      {% if current_user and current_user.role == \'student\' %}\n      <a href="{{ url_for(\'my_home\') }}" class="{{ \'active\' if request.endpoint == \'my_home\' }}">Home</a>\n      <a href="{{ url_for(\'my_result\') }}" class="{{ \'active\' if request.endpoint == \'my_result\' }}">My result</a>\n      <a href="{{ url_for(\'my_attendance\') }}" class="{{ \'active\' if request.endpoint == \'my_attendance\' }}">My attendance</a>\n      <a href="{{ url_for(\'my_homework\') }}" class="{{ \'active\' if request.endpoint == \'my_homework\' }}">Homework</a>\n      <a href="{{ url_for(\'my_timetable\') }}" class="{{ \'active\' if request.endpoint == \'my_timetable\' }}">Timetable</a>\n      <a href="{{ url_for(\'my_fees\') }}" class="{{ \'active\' if request.endpoint == \'my_fees\' }}">My fees</a>\n      <a href="{{ url_for(\'my_transport\') }}" class="{{ \'active\' if request.endpoint == \'my_transport\' }}">My transport</a>\n      <a href="{{ url_for(\'my_library\') }}" class="{{ \'active\' if request.endpoint == \'my_library\' }}">Library</a>\n      <a href="{{ url_for(\'notices\') }}" class="{{ \'active\' if request.endpoint == \'notices\' }}">Notices</a>\n      <a href="{{ url_for(\'password\') }}" class="{{ \'active\' if request.endpoint == \'password\' }}">Password</a>\n      {% else %}\n      <a href="{{ url_for(\'dashboard\') }}" class="{{ \'active\' if request.endpoint == \'dashboard\' }}">Dashboard</a>\n      <a href="{{ url_for(\'students\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'student\') }}">Students</a>\n      <a href="{{ url_for(\'exams\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'exam\') }}">Exams</a>\n      <a href="{{ url_for(\'subjects\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'subject\') }}">Subjects</a>\n      <a href="{{ url_for(\'schedule\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'schedule\') }}">Exam schedule</a>\n      <a href="{{ url_for(\'attendance\') }}" class="{{ \'active\' if request.endpoint == \'attendance\' }}">Attendance</a>\n      <a href="{{ url_for(\'timetable\') }}" class="{{ \'active\' if request.endpoint == \'timetable\' }}">Timetable</a>\n      <a href="{{ url_for(\'homework\') }}" class="{{ \'active\' if request.endpoint == \'homework\' }}">Homework</a>\n      <a href="{{ url_for(\'marks\') }}" class="{{ \'active\' if request.endpoint == \'marks\' }}">Marks entry</a>\n      <a href="{{ url_for(\'results\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'results\') }}">Results</a>\n      <a href="{{ url_for(\'fees\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'fee\') }}">Fees</a>\n      <a href="{{ url_for(\'parents\') }}" class="{{ \'active\' if request.endpoint == \'parents\' }}">Parents</a>\n      <a href="{{ url_for(\'circulars\') }}" class="{{ \'active\' if request.endpoint == \'circulars\' }}">Circulars</a>\n      <a href="{{ url_for(\'events\') }}" class="{{ \'active\' if request.endpoint == \'events\' }}">Calendar</a>\n      <a href="{{ url_for(\'polls\') }}" class="{{ \'active\' if request.endpoint == \'polls\' }}">Polls</a>\n      <a href="{{ url_for(\'library\') }}" class="{{ \'active\' if request.endpoint == \'library\' }}">Library</a>\n      <a href="{{ url_for(\'transport\') }}" class="{{ \'active\' if request.endpoint == \'transport\' }}">Transport</a>\n      <a href="{{ url_for(\'admissions\') }}" class="{{ \'active\' if request.endpoint == \'admissions\' }}">Admissions</a>\n      {% if is_admin %}\n      <a href="{{ url_for(\'staff\') }}" class="{{ \'active\' if request.endpoint == \'staff\' }}">Staff</a>\n      <a href="{{ url_for(\'payroll\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'payroll\') }}">Payroll</a>\n      {% endif %}\n      <a href="{{ url_for(\'hostel\') }}" class="{{ \'active\' if request.endpoint == \'hostel\' }}">Hostel</a>\n      <a href="{{ url_for(\'inventory\') }}" class="{{ \'active\' if request.endpoint == \'inventory\' }}">Store</a>\n      <a href="{{ url_for(\'certificates\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'certificate\') }}">Certificates</a>\n      <a href="{{ url_for(\'notifications\') }}" class="{{ \'active\' if request.endpoint == \'notifications\' }}">Messages</a>\n      {% if is_admin %}\n      <a href="{{ url_for(\'users\') }}" class="{{ \'active\' if request.endpoint and request.endpoint.startswith(\'user\') }}">Users</a>\n      {% endif %}\n      {% endif %}\n    </nav>\n    <div class="sidebar-foot">\n      {% if current_user %}\n      <span class="who">{{ current_user.full_name or current_user.username }}\n        <em>{{ current_user.role }}</em></span>\n      {% if current_user.role != \'student\' %}\n      <a href="{{ url_for(\'password\') }}">Change password</a>\n      {% endif %}\n      <a href="{{ url_for(\'logout\') }}">Log out</a>\n      {% endif %}\n      <span>{{ \'Cloud · Turso\' if cloud_db else \'SQLite\' }} · v3.2</span>\n    </div>\n  </aside>\n\n  <main>\n    {% if db_warning %}\n    <div class="flash error">{{ db_warning }}</div>\n    {% endif %}\n    {% if is_admin %}\n    <div class="banner admin">Admin mode — you can see and edit every user\'s data.</div>\n    {% endif %}\n    {% with messages = get_flashed_messages(with_categories=true) %}\n      {% for category, message in messages %}\n        <div class="flash {{ category }}">{{ message }}</div>\n      {% endfor %}\n    {% endwith %}\n    {% block content %}{% endblock %}\n  </main>\n</div>\n</body>\n</html>\n',
     'login.html':
         '{% extends "base.html" %}\n{% block title %}Log in{% endblock %}\n{% block content %}\n<div class="login-wrap">\n  <form class="card login" method="post">\n    <h1>Log in</h1>\n    <p class="muted">{{ school_name }} · examination module</p>\n    <label>Username\n      <input name="username" autofocus required autocomplete="username">\n    </label>\n    <label>Password\n      <input type="password" name="password" required autocomplete="current-password">\n    </label>\n    <button class="btn primary" type="submit">Log in</button>\n    <p class="muted small">Each account sees only its own data. Ask the admin\n      for a username and password.</p>\n    <p class="muted small"><a href="{{ url_for(\'about\') }}">About Exam Script 2</a></p>\n  </form>\n</div>\n{% endblock %}\n',
     'dashboard.html':
@@ -709,10 +709,29 @@ class _HTTPCursor:
         return None
 
 
+CLOUD_ERROR = ""
+
+
 def open_db():
-    """The database connection: the cloud one if configured, else the file."""
-    if TURSO_URL:
-        return CloudDB(TURSO_URL, TURSO_TOKEN)
+    """The database connection: the cloud one if configured, else the file.
+
+    If the cloud database cannot be reached the app keeps working on the local
+    file and remembers the reason, so the site never dies because of a typo in
+    an environment variable.
+    """
+    global CLOUD_ERROR
+    if TURSO_URL and not CLOUD_ERROR:
+        try:
+            conn = CloudDB(TURSO_URL, TURSO_TOKEN)
+            conn.execute("SELECT 1")
+            CLOUD_ERROR = ""
+            return conn
+        except Exception as exc:              # noqa: BLE001 - report, never crash
+            CLOUD_ERROR = f"{type(exc).__name__}: {exc}"[:300]
+            print(f"[exam-manager] CLOUD DATABASE UNREACHABLE - {CLOUD_ERROR}",
+                  flush=True)
+            print("[exam-manager]   falling back to the local file; data will NOT "
+                  "survive a restart", flush=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -773,9 +792,16 @@ def _migrate(conn):
     conn.commit()
 
 
-def init_db():
+def init_db(verbose=False):
     conn = open_db()
-    conn.executescript(SCHEMA)
+    try:
+        conn.executescript(SCHEMA)
+    except Exception as exc:                 # noqa: BLE001
+        print(f"[exam-manager] SCHEMA FAILED: {type(exc).__name__}: {exc}",
+              flush=True)
+        if verbose:
+            raise
+        return False
     _migrate(conn)
     # anything an admin created belongs to the school, not to the admin
     admin_ids = [r[0] for r in conn.execute(
@@ -787,6 +813,9 @@ def init_db():
                          f"WHERE owner_id IN ({marks})", admin_ids)
     conn.commit()
     conn.close()
+    if verbose:
+        return True
+    return True
 
 
 def get_db():
@@ -894,7 +923,7 @@ def load_user():
         if g.user is None:
             session.clear()
     if request.endpoint in ("welcome", "about", "login", "static", "healthz",
-                            "robots", "sitemap"):
+                            "robots", "sitemap", "setup_route"):
         return None
     if g.user is None:
         return redirect(url_for("login", next=request.path))
@@ -1005,7 +1034,10 @@ def inject_globals():
         "school_name": SCHOOL_NAME,
         "current_user": getattr(g, "user", None),
         "is_admin": is_admin(),
-        "cloud_db": bool(TURSO_URL),
+        "cloud_db": bool(TURSO_URL) and not CLOUD_ERROR,
+        "db_warning": ("Cloud database se connection nahi hua - data temporary "
+                       "hai. /healthz dekhein." if (TURSO_URL and CLOUD_ERROR)
+                       else ""),
         "today": datetime.now().strftime("%d/%m/%Y"),
     }
 
@@ -3553,7 +3585,14 @@ def diagnostics():
                    f"{len(STYLE_CSS)} bytes"))
 
     db_ok = True
-    db_detail = f"Turso cloud database ({TURSO_URL})" if TURSO_URL else DB_PATH
+    if TURSO_URL and not CLOUD_ERROR:
+        db_detail = f"Turso cloud database ({TURSO_URL}) - persistent"
+    elif TURSO_URL:
+        db_ok = False
+        db_detail = (f"Turso configured but FAILED: {CLOUD_ERROR} - "
+                     f"running on the local file, data is temporary")
+    else:
+        db_detail = f"{DB_PATH} (local file - data is temporary)"
     try:
         conn = open_db()
         conn.execute("CREATE TABLE IF NOT EXISTS _probe (x INTEGER)")
@@ -3622,6 +3661,39 @@ def no_index(response):
     if request.endpoint not in ("about", "static", "robots", "sitemap"):
         response.headers["X-Robots-Tag"] = "noindex, nofollow"
     return response
+
+
+
+@app.route("/setup")
+def setup_route():
+    """Create the tables in a brand-new database.
+
+    Needs the admin password as ?key=..., so a stranger cannot reset anything.
+    Safe to open more than once - it only creates what is missing.
+    """
+    key = request.args.get("key", "")
+    expected = ADMIN_PASSWORD or os.environ.get("SETUP_KEY", "")
+    if not expected:
+        return {"ok": False, "error": "set ADMIN_PASSWORD (or SETUP_KEY) in "
+                                      "Render's environment first"}, 403
+    if key != expected:
+        return {"ok": False, "error": "wrong key"}, 403
+    try:
+        conn = open_db()
+        conn.executescript(SCHEMA)
+        _migrate(conn)
+        conn.commit()
+        tables = [r["name"] if isinstance(r, dict) else r[0] for r in
+                  conn.execute("SELECT name FROM sqlite_master WHERE type='table'"
+                               " ORDER BY name").fetchall()]
+        users = conn.execute("SELECT COUNT(*) c FROM users").fetchone()
+        conn.close()
+        return {"ok": True, "database": TURSO_URL or DB_PATH,
+                "tables": tables,
+                "users": (users["c"] if isinstance(users, dict) else users[0])}
+    except Exception as exc:                 # noqa: BLE001
+        return {"ok": False, "database": TURSO_URL or DB_PATH,
+                "error": f"{type(exc).__name__}: {exc}"[:400]}, 500
 
 
 @app.route("/healthz")
