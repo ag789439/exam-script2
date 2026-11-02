@@ -83,7 +83,7 @@ TEMPLATES = {
     'schedule.html':
         '{% extends "base.html" %}\n{% block title %}Exam schedule{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Exam schedule</h1><p>One paper per subject — date, time, hall and marks</p></div>\n</header>\n\n<section class="card">\n  <details open>\n    <summary>Add a paper</summary>\n    {% if not exams or not subjects %}\n      <p class="muted">Create at least one exam and one subject first.</p>\n    {% else %}\n    <form class="form-grid" method="post" action="{{ url_for(\'schedule_save\') }}">\n      <label>Exam *\n        <select name="exam_id" required>\n          <option value="">— choose —</option>\n          {% for e in exams %}<option value="{{ e.id }}">{{ exam_label(e) }}</option>{% endfor %}\n        </select>\n      </label>\n      <label>Subject *\n        <select name="subject_id" required>\n          <option value="">— choose —</option>\n          {% for s in subjects %}<option value="{{ s.id }}">{{ s.subject_name }} ({{ s.subject_code }})</option>{% endfor %}\n        </select>\n      </label>\n      <label>Exam date<input name="exam_date" placeholder="dd/mm/yyyy"></label>\n      <label>Start time<input name="start_time" placeholder="09:00"></label>\n      <label>Duration (minutes)<input name="duration" value="180"></label>\n      <label>Room / hall<input name="room"></label>\n      <label>Invigilator<input name="invigilator"></label>\n      <label>Max marks<input name="max_marks" value="100"></label>\n      <label>Pass marks<input name="pass_marks" value="33"></label>\n      <div class="form-actions"><button class="btn primary" type="submit">Add paper</button></div>\n    </form>\n    {% endif %}\n  </details>\n</section>\n\n<section class="card">\n  <div class="card-head"><h2>Scheduled papers <span class="pill">{{ papers|length }}</span></h2></div>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Exam</th><th>Subject</th><th>Date</th><th>Time</th><th>Duration</th>\n                 <th>Room</th><th>Invigilator</th><th>Max</th><th>Pass</th><th></th></tr></thead>\n      <tbody>\n      {% for p in papers %}\n        <tr>\n          <td>{{ exam_label(p) }}</td><td>{{ p.subject_name }}</td>\n          <td>{{ disp_date(p.exam_date) }}</td><td>{{ p.start_time }}</td>\n          <td>{{ p.duration }}</td><td>{{ p.room or \'\' }}</td>\n          <td>{{ p.invigilator or \'\' }}</td>\n          <td class="num">{{ fmt_num(p.max_marks) }}</td>\n          <td class="num">{{ fmt_num(p.pass_marks) }}</td>\n          <td class="row-actions">\n            <form method="post" action="{{ url_for(\'schedule_delete\', pid=p.id) }}"\n                  onsubmit="return confirm(\'Remove this paper and its marks?\')">\n              <button class="btn danger small" type="submit">Delete</button>\n            </form>\n          </td>\n        </tr>\n      {% else %}\n        <tr><td colspan="10" class="empty">No papers scheduled yet.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
     'marks.html':
-        '{% extends "base.html" %}\n{% block title %}Marks entry{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Marks entry</h1><p>Pick an exam and a subject, then fill the marks</p></div>\n</header>\n\n<section class="card">\n  <form class="form-grid" method="get">\n    <label>Exam\n      <select name="exam_id" onchange="this.form.submit()">\n        <option value="">— choose —</option>\n        {% for e in exams %}\n          <option value="{{ e.id }}" {{ \'selected\' if exam_id == e.id|string }}>{{ exam_label(e) }}</option>\n        {% endfor %}\n      </select>\n    </label>\n    <label>Subject\n      <select name="subject_id" onchange="this.form.submit()">\n        <option value="">— choose —</option>\n        {% for s in subjects %}\n          <option value="{{ s.id }}" {{ \'selected\' if subject_id == s.id|string }}>{{ s.subject_name }} ({{ s.subject_code }})</option>\n        {% endfor %}\n      </select>\n    </label>\n    <noscript><div class="form-actions"><button class="btn ghost" type="submit">Load sheet</button></div></noscript>\n  </form>\n</section>\n\n{% if info %}<p class="info">{{ info }}</p>{% endif %}\n\n{% if sheet %}\n<section class="card">\n  <form method="post">\n    <input type="hidden" name="exam_id" value="{{ exam_id }}">\n    <input type="hidden" name="subject_id" value="{{ subject_id }}">\n    <div class="table-wrap">\n      <table class="grid">\n        <thead><tr><th>Roll</th><th>Name</th><th>Marks (max {{ fmt_num(ctx.max_marks) }})</th>\n                   <th>Result</th><th>Remarks</th></tr></thead>\n        <tbody>\n        {% for row in sheet %}\n          {% set m = row.mark %}\n          <tr>\n            <td>{{ row.student.roll_no }}</td>\n            <td>{{ row.student.name }}</td>\n            <td class="num">\n              <input class="mark-input" type="number" step="0.5" min="0"\n                     max="{{ ctx.max_marks }}" name="marks_{{ row.student.id }}"\n                     value="{{ fmt_num(m.marks_obtained) if m and m.marks_obtained is not none else \'\' }}">\n            </td>\n            <td>\n              {% if m and m.marks_obtained is not none %}\n                {% if m.marks_obtained >= ctx.pass_marks %}\n                  <span class="tag ok">Pass</span>\n                {% else %}\n                  <span class="tag bad">Fail</span>\n                {% endif %}\n              {% else %}<span class="muted">—</span>{% endif %}\n            </td>\n            <td><input name="remarks_{{ row.student.id }}" value="{{ m.remarks if m and m.remarks else \'\' }}"></td>\n          </tr>\n        {% endfor %}\n        </tbody>\n      </table>\n    </div>\n    <div class="form-actions">\n      <button class="btn primary" type="submit">Save all marks</button>\n    </div>\n  </form>\n</section>\n{% endif %}\n{% endblock %}\n',
+        '{% extends "base.html" %}\n{% block title %}Marks entry{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Marks entry</h1><p>Pick an exam and a subject, then fill the marks</p></div>\n</header>\n\n<section class="card">\n  <form class="form-grid" method="get">\n    <label>Exam\n      <select name="exam_id" onchange="this.form.submit()">\n        <option value="">— choose —</option>\n        {% for e in exams %}\n          <option value="{{ e.id }}" {{ \'selected\' if exam_id == e.id|string }}>{{ exam_label(e) }}</option>\n        {% endfor %}\n      </select>\n    </label>\n    <label>Subject\n      <select name="subject_id" onchange="this.form.submit()">\n        <option value="">— choose —</option>\n        {% for s in subjects %}\n          <option value="{{ s.id }}" {{ \'selected\' if subject_id == s.id|string }}>{{ s.subject_name }} ({{ s.subject_code }})</option>\n        {% endfor %}\n      </select>\n    </label>\n    <noscript><div class="form-actions"><button class="btn ghost" type="submit">Load sheet</button></div></noscript>\n  </form>\n</section>\n\n{% if info %}<p class="info">{{ info }}</p>{% endif %}\n\n{% if sheet %}\n<section class="card">\n  <form method="post">\n    <input type="hidden" name="exam_id" value="{{ exam_id }}">\n    <input type="hidden" name="subject_id" value="{{ subject_id }}">\n    <div class="table-wrap">\n      <table class="grid">\n        <thead><tr><th>Roll</th><th>Name</th>\n                   <th>Theory</th><th>Internal</th>\n                   <th>Total (max {{ fmt_num(ctx.max_marks) }})</th>\n                   <th>Result</th><th>Remarks</th></tr></thead>\n        <tbody>\n        {% for row in sheet %}\n          {% set m = row.mark %}\n          <tr>\n            <td>{{ row.student.roll_no }}</td>\n            <td>{{ row.student.name }}</td>\n            <td class="num">\n              <input class="mark-input" type="number" step="0.5" min="0"\n                     max="{{ ctx.max_marks }}" name="theory_{{ row.student.id }}"\n                     value="{{ fmt_num(m.theory) if m and m.theory is not none else \'\' }}"\n                     placeholder="—">\n            </td>\n            <td class="num">\n              <input class="mark-input" type="number" step="0.5" min="0"\n                     max="{{ ctx.max_marks }}" name="internal_{{ row.student.id }}"\n                     value="{{ fmt_num(m.internal) if m and m.internal is not none else \'\' }}"\n                     placeholder="—">\n            </td>\n            <td class="num">\n              <input class="mark-input" type="number" step="0.5" min="0"\n                     max="{{ ctx.max_marks }}" name="marks_{{ row.student.id }}"\n                     value="{{ fmt_num(m.marks_obtained) if m and m.marks_obtained is not none else \'\' }}">\n            </td>\n            <td>\n              {% if m and m.marks_obtained is not none %}\n                {% if m.marks_obtained >= ctx.pass_marks %}\n                  <span class="tag ok">Pass</span>\n                {% else %}\n                  <span class="tag bad">Fail</span>\n                {% endif %}\n              {% else %}<span class="muted">—</span>{% endif %}\n            </td>\n            <td><input name="remarks_{{ row.student.id }}" value="{{ m.remarks if m and m.remarks else \'\' }}"></td>\n          </tr>\n        {% endfor %}\n        </tbody>\n      </table>\n    </div>\n    <div class="form-actions">\n      <button class="btn primary" type="submit">Save all marks</button>\n    </div>\n  </form>\n</section>\n{% endif %}\n{% endblock %}\n',
     'results.html':
         '{% extends "base.html" %}\n{% block title %}Results{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Results</h1><p>Totals, percentage, grade, rank and pass / fail</p></div>\n  {% if results %}\n  <div class="actions">\n    <a class="btn ghost" href="{{ url_for(\'results_csv\', exam_id=exam_id, class_name=class_name) }}">Export CSV</a>\n  </div>\n  {% endif %}\n</header>\n\n<section class="card">\n  <form class="form-grid" method="get">\n    <label>Exam\n      <select name="exam_id" onchange="this.form.submit()">\n        <option value="">— choose —</option>\n        {% for e in exams %}\n          <option value="{{ e.id }}" {{ \'selected\' if exam_id == e.id|string }}>{{ exam_label(e) }}</option>\n        {% endfor %}\n      </select>\n    </label>\n    <label>Class\n      <input name="class_name" value="{{ class_name }}" placeholder="e.g. 8">\n    </label>\n    <div class="form-actions"><button class="btn primary" type="submit">Generate</button></div>\n  </form>\n</section>\n\n{% if info %}<p class="info">{{ info }}</p>{% endif %}\n\n{% if results %}\n<section class="card">\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Rank</th><th>Roll</th><th>Admission No</th><th>Name</th>\n                 <th>Obtained</th><th>Max</th><th>%</th><th>Grade</th>\n                 <th>Failed</th><th>Result</th><th></th></tr></thead>\n      <tbody>\n      {% for r in results %}\n        <tr>\n          <td>{{ r.rank }}</td><td>{{ r.roll_no }}</td><td>{{ r.admission_no }}</td>\n          <td>{{ r.name }}</td><td class="num">{{ fmt_num(r.obtained) }}</td>\n          <td class="num">{{ fmt_num(r.total_max) }}</td>\n          <td class="num">{{ \'%.2f\'|format(r.percentage) }}</td>\n          <td>{{ r.grade }}</td><td class="num">{{ r.failed_subjects }}</td>\n          <td>{% if r.result == \'Pass\' %}<span class="tag ok">Pass</span>\n              {% else %}<span class="tag bad">Fail</span>{% endif %}</td>\n          <td><a class="btn ghost small" target="_blank"\n                 href="{{ url_for(\'report_card\', exam_id=exam_id, student_id=r.student_id) }}">Report card</a></td>\n        </tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endif %}\n{% endblock %}\n',
     'users.html':
@@ -117,7 +117,7 @@ TEMPLATES = {
     'my_timetable.html':
         '{% extends "base.html" %}\n{% block title %}Timetable{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>My timetable</h1><p>{{ student.name }} · Class {{ student.class_name }}{% if student.section %} – {{ student.section }}{% endif %}</p></div>\n</header>\n\n<section class="card">\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Period</th>{% for d in days %}<th>{{ d[:3] }}</th>{% endfor %}</tr></thead>\n      <tbody>\n      {% for p in periods %}\n        <tr>\n          <td><strong>{{ p }}</strong></td>\n          {% for d in days %}\n            {% set c = cells.get((d, p)) %}\n            <td>{% if c and c.subject_name %}<strong>{{ c.subject_code or c.subject_name }}</strong>{% if c.teacher %}<br><span class="muted">{{ c.teacher }}</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>\n          {% endfor %}\n        </tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
     'report_card.html':
-        '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">\n<title>Report card · {{ student.name }}</title>\n<style>\n body{font:14px/1.6 "Segoe UI",Arial,sans-serif;color:#111;margin:0;padding:26px;background:#fff}\n .wrap{max-width:720px;margin:0 auto;border:2px solid #1f3a5f;padding:24px 28px}\n h1{font-size:19px;margin:0;text-align:center;letter-spacing:.05em;color:#1f3a5f}\n .sub{text-align:center;font-size:12px;color:#555;margin-bottom:16px}\n table{width:100%;border-collapse:collapse;margin:10px 0}\n td,th{border:1px solid #cbd5e1;padding:7px 8px;text-align:left;font-size:13px}\n th{background:#eef2f8}\n .right{text-align:right}\n .tot{font-weight:700;background:#f8fafc}\n .meta td{border:none;padding:3px 0;font-size:13px}\n .sign{margin-top:36px;display:flex;justify-content:space-between;font-size:12px;color:#444}\n @media print{ body{padding:0} .wrap{border-width:1px} }\n</style></head><body>\n<div class="wrap">\n  <h1>{{ school_name }}</h1>\n  <div class="sub">Report card · {{ exam_label(exam) }}</div>\n\n  <table class="meta">\n    <tr><td><strong>Name:</strong> {{ student.name }}</td>\n        <td class="right"><strong>Class:</strong> {{ student.class_name }}{% if student.section %} – {{ student.section }}{% endif %}</td></tr>\n    <tr><td><strong>Admission No:</strong> {{ student.admission_no }}</td>\n        <td class="right"><strong>Roll No:</strong> {{ student.roll_no }}</td></tr>\n  </table>\n\n  <table>\n    <thead><tr><th>Subject</th><th class="right">Max</th><th class="right">Pass</th>\n               <th class="right">Obtained</th><th>Result</th></tr></thead>\n    <tbody>\n    {% for s in subjects %}\n      <tr>\n        <td>{{ s.subject_name }} ({{ s.subject_code }})</td>\n        <td class="right">{{ fmt_num(s.max_marks) }}</td>\n        <td class="right">{{ fmt_num(s.pass_marks) }}</td>\n        <td class="right">{{ fmt_num(s.marks_obtained) }}</td>\n        <td>{% if s.marks_obtained is not none and s.pass_marks is not none and s.marks_obtained < s.pass_marks %}Fail{% else %}Pass{% endif %}</td>\n      </tr>\n    {% endfor %}\n    <tr class="tot">\n      <td>Total</td>\n      <td class="right">{{ fmt_num(mine.total_max) }}</td>\n      <td></td>\n      <td class="right">{{ fmt_num(mine.obtained) }}</td>\n      <td>{{ mine.result }}</td>\n    </tr>\n    </tbody>\n  </table>\n\n  <table class="meta">\n    <tr><td><strong>Percentage:</strong> {{ \'%.2f\'|format(mine.percentage) }}%</td>\n        <td class="right"><strong>Grade:</strong> {{ mine.grade }}</td></tr>\n    <tr><td><strong>Rank in class:</strong> {{ mine.rank }}</td>\n        <td class="right"><strong>Subjects failed:</strong> {{ mine.failed_subjects }}</td></tr>\n  </table>\n\n  <div class="sign"><span>Class teacher</span><span>Principal</span><span>Parent\'s signature</span></div>\n</div>\n<script>window.onload=function(){window.print()}</script>\n</body></html>\n',
+        '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">\n<title>Report card · {{ student.name }}</title>\n<style>\n body{font:14px/1.6 "Segoe UI",Arial,sans-serif;color:#111;margin:0;padding:26px;background:#fff}\n .wrap{max-width:720px;margin:0 auto;border:2px solid #1f3a5f;padding:24px 28px}\n h1{font-size:19px;margin:0;text-align:center;letter-spacing:.05em;color:#1f3a5f}\n .sub{text-align:center;font-size:12px;color:#555;margin-bottom:16px}\n table{width:100%;border-collapse:collapse;margin:10px 0}\n td,th{border:1px solid #cbd5e1;padding:7px 8px;text-align:left;font-size:13px}\n th{background:#eef2f8}\n .right{text-align:right}\n .tot{font-weight:700;background:#f8fafc}\n .meta td{border:none;padding:3px 0;font-size:13px}\n .sign{margin-top:36px;display:flex;justify-content:space-between;font-size:12px;color:#444}\n .sign-table{width:100%;border-collapse:collapse;margin-top:40px}\n .sign-table td{border:1px solid #cbd5e1;padding:8px;text-align:center;font-size:12px}\n .sign-table tr.space td{height:46px}\n @media print{ body{padding:0} .wrap{border-width:1px} }\n</style></head><body>\n<div class="wrap">\n  <h1>{{ school_name }}</h1>\n  <div class="sub">Report card · {{ exam_label(exam) }}</div>\n\n  <table class="meta">\n    <tr><td><strong>Name:</strong> {{ student.name }}</td>\n        <td class="right"><strong>Class:</strong> {{ student.class_name }}{% if student.section %} – {{ student.section }}{% endif %}</td></tr>\n    <tr><td><strong>Admission No:</strong> {{ student.admission_no }}</td>\n        <td class="right"><strong>Roll No:</strong> {{ student.roll_no }}</td></tr>\n  </table>\n\n  <table>\n    <thead><tr><th>Subject</th><th class="right">Max</th><th class="right">Pass</th>\n               <th class="right">Theory</th><th class="right">Internal</th>\n               <th class="right">Total</th><th>Result</th></tr></thead>\n    <tbody>\n    {% set ns = namespace(theory=0, internal=0) %}\n    {% for s in subjects %}\n      <tr>\n        <td>{{ s.subject_name }} ({{ s.subject_code }})</td>\n        <td class="right">{{ fmt_num(s.max_marks) }}</td>\n        <td class="right">{{ fmt_num(s.pass_marks) }}</td>\n        <td class="right">{{ fmt_num(s.theory) if s.theory is not none else \'—\' }}</td>\n        <td class="right">{{ fmt_num(s.internal) if s.internal is not none else \'—\' }}</td>\n        <td class="right"><strong>{{ fmt_num(s.marks_obtained) }}</strong></td>\n        <td>{% if s.marks_obtained is not none and s.pass_marks is not none and s.marks_obtained < s.pass_marks %}Fail{% else %}Pass{% endif %}</td>\n      </tr>\n      {% if s.theory is not none %}{% set ns.theory = ns.theory + s.theory %}{% endif %}\n      {% if s.internal is not none %}{% set ns.internal = ns.internal + s.internal %}{% endif %}\n    {% endfor %}\n    <tr class="tot">\n      <td>Grand total</td>\n      <td class="right">{{ fmt_num(mine.total_max) }}</td>\n      <td></td>\n      <td class="right">{{ fmt_num(ns.theory) }}</td>\n      <td class="right">{{ fmt_num(ns.internal) }}</td>\n      <td class="right">{{ fmt_num(mine.obtained) }}</td>\n      <td>{{ mine.result }}</td>\n    </tr>\n    </tbody>\n  </table>\n\n  <table class="meta">\n    <tr><td><strong>Percentage:</strong> {{ \'%.2f\'|format(mine.percentage) }}%</td>\n        <td class="right"><strong>Grade:</strong> {{ mine.grade }}</td></tr>\n    <tr><td><strong>Rank in class:</strong> {{ mine.rank }}</td>\n        <td class="right"><strong>Subjects failed:</strong> {{ mine.failed_subjects }}</td></tr>\n  </table>\n\n  <table class="sign-table">\n    <tr>\n      <td>Class teacher\'s signature</td>\n      <td>Principal\'s signature</td>\n      <td>Parent\'s signature</td>\n    </tr>\n    <tr class="space"><td></td><td></td><td></td></tr>\n  </table>\n</div>\n<script>window.onload=function(){window.print()}</script>\n</body></html>\n',
     'transport.html':
         '{% extends "base.html" %}\n{% block title %}Transport{% endblock %}\n{% block content %}\n<header class="page-head"><div><h1>Transport</h1><p>Routes, vehicles, drivers and who travels on which bus</p></div></header>\n\n<section class="card">\n  <h2 class="card-title">Add a route</h2>\n  <form class="form-grid" method="post">\n    <input type="hidden" name="action" value="route">\n    <label>Route name <input name="route_name" required placeholder="Route 1 — Dwarka"></label>\n    <label>Vehicle no <input name="vehicle_no" placeholder="DL 1C 1234"></label>\n    <label>Driver <input name="driver_name" placeholder="Ram Singh"></label>\n    <label>Driver phone <input name="driver_phone" placeholder="98765 43210"></label>\n    <label>Capacity <input name="capacity" type="number" value="40"></label>\n    <label class="wide">Stops <input name="stops" placeholder="Sector 12, Sector 7, School gate"></label>\n    <div class="form-actions"><button class="btn primary" type="submit">Add route</button></div>\n  </form>\n</section>\n\n<section class="card">\n  <h2 class="card-title">Assign a student</h2>\n  <form class="form-grid" method="post">\n    <input type="hidden" name="action" value="assign">\n    <label class="wide">Student\n      <select name="student_id" required>\n        <option value="">— choose —</option>\n        {% for s in students %}<option value="{{ s.id }}">{{ s.name }} · {{ s.class_name }}{% if s.section %} – {{ s.section }}{% endif %} · roll {{ s.roll_no }}</option>{% endfor %}\n      </select>\n    </label>\n    <label>Route\n      <select name="route_id" required>\n        <option value="">— choose —</option>\n        {% for r in routes %}<option value="{{ r.id }}">{{ r.route_name }}</option>{% endfor %}\n      </select>\n    </label>\n    <label>Stop <input name="stop_name" placeholder="Sector 12"></label>\n    <div class="form-actions"><button class="btn primary" type="submit">Assign</button></div>\n  </form>\n</section>\n\n<section class="card">\n  <h2 class="card-title">Routes</h2>\n  <div class="table-wrap"><table class="grid">\n    <thead><tr><th>Route</th><th>Vehicle</th><th>Driver</th><th>Phone</th><th>Seats</th><th>Stops</th></tr></thead>\n    <tbody>\n    {% for r in routes %}\n      <tr><td><strong>{{ r.route_name }}</strong></td><td>{{ r.vehicle_no or \'—\' }}</td>\n          <td>{{ r.driver_name or \'—\' }}</td><td>{{ r.driver_phone or \'—\' }}</td>\n          <td>{{ r.taken }}/{{ r.capacity }}</td><td class="muted">{{ r.stops or \'—\' }}</td></tr>\n    {% else %}<tr><td colspan="6" class="muted">No routes yet.</td></tr>{% endfor %}\n    </tbody>\n  </table></div>\n</section>\n\n<section class="card">\n  <h2 class="card-title">Students on transport</h2>\n  <div class="table-wrap"><table class="grid">\n    <thead><tr><th>Route</th><th>Student</th><th>Class</th><th>Roll</th><th>Stop</th><th></th></tr></thead>\n    <tbody>\n    {% for a in assigned %}\n      <tr><td>{{ a.route_name or \'—\' }}</td><td>{{ a.name }}</td>\n          <td>{{ a.class_name }}{% if a.section %} – {{ a.section }}{% endif %}</td>\n          <td>{{ a.roll_no }}</td><td>{{ a.stop_name or \'—\' }}</td>\n          <td><form method="post"><input type="hidden" name="action" value="unassign">\n              <input type="hidden" name="student_id" value="{{ a.student_id }}">\n              <button class="btn ghost small" type="submit">Remove</button></form></td></tr>\n    {% else %}<tr><td colspan="6" class="muted">Nobody assigned yet.</td></tr>{% endfor %}\n    </tbody>\n  </table></div>\n</section>\n{% endblock %}\n',
     'my_transport.html':
@@ -752,6 +752,11 @@ def _migrate(conn):
     if "student_id" not in _columns(conn, "users"):
         conn.execute("ALTER TABLE users ADD COLUMN student_id INTEGER")
 
+    if "theory" not in _columns(conn, "marks"):
+        conn.execute("ALTER TABLE marks ADD COLUMN theory REAL")
+    if "internal" not in _columns(conn, "marks"):
+        conn.execute("ALTER TABLE marks ADD COLUMN internal REAL")
+
     for table in ("students", "staff"):
         try:
             if "photo" not in _columns(conn, table):
@@ -923,7 +928,7 @@ def load_user():
         if g.user is None:
             session.clear()
     if request.endpoint in ("welcome", "about", "login", "static", "healthz",
-                            "robots", "sitemap", "setup_route"):
+                            "robots", "sitemap", "setup_route", "demo_seed"):
         return None
     if g.user is None:
         return redirect(url_for("login", next=request.path))
@@ -1046,8 +1051,9 @@ def inject_globals():
 def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        user = query("SELECT * FROM users WHERE username=?", (username,), one=True)
+        password = request.form.get("password", "").strip()
+        user = query("SELECT * FROM users WHERE LOWER(username)=LOWER(?)",
+                     (username,), one=True)
         if (user and user["active"]
                 and check_password_hash(user["password_hash"], password)):
             session.clear()
@@ -1685,25 +1691,38 @@ def marks():
             for st in query("SELECT id FROM students"
                             + _sheet_where(exam)[0], _sheet_where(exam)[1]):
                 raw = request.form.get(f"marks_{st['id']}", "").strip()
+                th_raw = request.form.get(f"theory_{st['id']}", "").strip()
+                in_raw = request.form.get(f"internal_{st['id']}", "").strip()
                 remark = request.form.get(f"remarks_{st['id']}", "").strip()
-                if raw == "":
+                theory = internal = None
+                if th_raw or in_raw:
+                    theory = to_float(th_raw) if th_raw else 0.0
+                    internal = to_float(in_raw) if in_raw else 0.0
+                    if theory is None or internal is None:
+                        continue
+                    value = round((theory or 0) + (internal or 0), 2)
+                elif raw == "":
                     value = None
                 else:
                     value = to_float(raw)
                     if value is None or value < 0 or value > max_marks:
                         continue
+                if value is not None and value > max_marks:
+                    continue
                 existing = query("SELECT id FROM marks WHERE exam_id=? AND"
                                  " student_id=? AND subject_id=?",
                                  (exam_id, st["id"], subject_id), one=True)
                 if existing:
-                    execute("UPDATE marks SET marks_obtained=?, remarks=?,"
-                            " updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                            (value, remark, existing["id"]))
+                    execute("UPDATE marks SET marks_obtained=?, theory=?,"
+                            " internal=?, remarks=?, updated_at=CURRENT_TIMESTAMP"
+                            " WHERE id=?",
+                            (value, theory, internal, remark, existing["id"]))
                 else:
                     execute("""INSERT INTO marks (exam_id, student_id,
-                               subject_id, marks_obtained, remarks)
-                               VALUES (?,?,?,?,?)""",
-                            (exam_id, st["id"], subject_id, value, remark))
+                               subject_id, marks_obtained, theory, internal,
+                               remarks) VALUES (?,?,?,?,?,?,?)""",
+                            (exam_id, st["id"], subject_id, value, theory,
+                             internal, remark))
                 saved += 1
             flash(f"Marks saved for {saved} student(s).", "ok")
             return redirect(url_for("marks", exam_id=exam_id,
@@ -2055,13 +2074,36 @@ def password():
 # --------------------------------------------------------------------------
 #  demo data for a school trial
 # --------------------------------------------------------------------------
-@app.route("/demo/seed", methods=["POST"])
+@app.route("/demo/seed", methods=["GET", "POST"])
 def demo_seed():
+    """Load the demo school. GET with ?key=<admin password> also works, so it
+    can be run from the address bar and reports exactly what happened."""
+    if request.method == "GET":
+        expected = ADMIN_PASSWORD or os.environ.get("SETUP_KEY", "")
+        if not expected or request.args.get("key", "") != expected:
+            return {"ok": False, "error": "wrong key"}, 403
+        try:
+            message = seed_demo()
+            counts = {
+                "students": query("SELECT COUNT(*) c FROM students", one=True)["c"],
+                "users": query("SELECT COUNT(*) c FROM users", one=True)["c"],
+                "marks": query("SELECT COUNT(*) c FROM marks", one=True)["c"],
+                "attendance": query("SELECT COUNT(*) c FROM attendance", one=True)["c"],
+            }
+            return {"ok": True, "message": message, "counts": counts}
+        except Exception as exc:              # noqa: BLE001
+            import traceback
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:400],
+                    "trace": traceback.format_exc()[-600:]}, 500
+
     if not is_admin():
         flash("Only an admin can load the demo data.", "error")
         return redirect(url_for("dashboard"))
-    added = seed_demo()
-    flash(added, "ok")
+    try:
+        added = seed_demo()
+        flash(added, "ok")
+    except Exception as exc:                  # noqa: BLE001
+        flash(f"Demo data failed: {type(exc).__name__}: {exc}"[:250], "error")
     return redirect(url_for("dashboard"))
 
 
@@ -2468,7 +2510,8 @@ def report_card():
     rows = compute_results(exam_id, (exam["class_name"] or "").strip())
     mine = next((r for r in rows if r["student_id"] == student_id), None)
     subjects = query("""SELECT s.subject_name, s.subject_code, sc.max_marks,
-                               sc.pass_marks, m.marks_obtained
+                               sc.pass_marks, m.marks_obtained, m.theory,
+                               m.internal
                         FROM marks m
                         JOIN subjects s ON s.id = m.subject_id
                         LEFT JOIN exam_schedule sc ON sc.exam_id = m.exam_id
@@ -3687,9 +3730,17 @@ def setup_route():
                   conn.execute("SELECT name FROM sqlite_master WHERE type='table'"
                                " ORDER BY name").fetchall()]
         users = conn.execute("SELECT COUNT(*) c FROM users").fetchone()
+        if request.args.get("reset") and ADMIN_PASSWORD:
+            conn.execute("UPDATE users SET password_hash=? WHERE role='admin'",
+                         (generate_password_hash(ADMIN_PASSWORD),))
+            conn.commit()
+        admin = conn.execute("SELECT username, role FROM users"
+                             " WHERE role='admin' LIMIT 1").fetchone()
         conn.close()
+        admin_name = (admin["username"] if isinstance(admin, dict)
+                      else admin[0]) if admin else None
         return {"ok": True, "database": TURSO_URL or DB_PATH,
-                "tables": tables,
+                "tables": tables, "admin_username": admin_name,
                 "users": (users["c"] if isinstance(users, dict) else users[0])}
     except Exception as exc:                 # noqa: BLE001
         return {"ok": False, "database": TURSO_URL or DB_PATH,
