@@ -100,7 +100,7 @@ TEMPLATES = {
     'parents.html':
         '{% extends "base.html" %}\n{% block title %}Parents{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Parents &amp; guardians</h1><p>Contact details for every family, class by class</p></div>\n</header>\n\n<section class="card">\n  <form class="form-grid" method="get">\n    <label>Class\n      <select name="class_name" onchange="this.form.submit()">\n        <option value="">all classes</option>\n        {% for c in classes %}<option value="{{ c }}" {{ \'selected\' if cls == c }}>{{ c }}</option>{% endfor %}\n      </select>\n    </label>\n    <div class="form-actions"><button class="btn primary" type="submit">Show</button></div>\n  </form>\n</section>\n\n<section class="card">\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Class</th><th>Roll</th><th>Student</th><th>Father</th>\n                 <th>Mother</th><th>Phone</th><th>Email</th></tr></thead>\n      <tbody>\n      {% for s in students %}\n        <tr>\n          <td>{{ s.class_name }}{% if s.section %} – {{ s.section }}{% endif %}</td>\n          <td>{{ s.roll_no }}</td>\n          <td>{{ s.name }}</td>\n          <td>{{ s.father_name or \'—\' }}</td>\n          <td>{{ s.mother_name or \'—\' }}</td>\n          <td>{{ s.phone or \'—\' }}</td>\n          <td>{{ s.email or \'—\' }}</td>\n        </tr>\n      {% else %}\n        <tr><td colspan="7" class="muted">No students yet.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
     'my_attendance.html':
-        '{% extends "base.html" %}\n{% block title %}My attendance{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>My attendance</h1><p>{{ student.name }} · Class {{ student.class_name }}{% if student.section %} – {{ student.section }}{% endif %}</p></div>\n</header>\n\n<section class="card">\n  <div class="kv">\n    <div><span>Days recorded</span><strong>{{ total }}</strong></div>\n    <div><span>Present</span><strong>{{ present }}</strong></div>\n    <div><span>Attendance</span><strong>{{ pct }}%</strong></div>\n  </div>\n</section>\n\n<section class="card">\n  <h2 class="card-title">Day by day</h2>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Date</th><th>Status</th><th>Remarks</th></tr></thead>\n      <tbody>\n      {% for r in rows %}\n        <tr>\n          <td>{{ disp_date(r.att_date) }}</td>\n          <td>{% if r.status == \'Present\' %}<span class="pill ok">Present</span>\n              {% elif r.status == \'Late\' %}<span class="pill warn">Late</span>\n              {% elif r.status == \'Leave\' %}<span class="pill warn">Leave</span>\n              {% else %}<span class="pill bad">Absent</span>{% endif %}</td>\n          <td>{{ r.remarks or \'\' }}</td>\n        </tr>\n      {% else %}\n        <tr><td colspan="3" class="muted">No attendance recorded yet.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
+        '{% extends "base.html" %}\n{% block title %}My attendance{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>My attendance</h1><p>{{ student.name }} · Class {{ student.class_name }}{% if student.section %} – {{ student.section }}{% endif %}</p></div>\n</header>\n\n\n<section class="card cal-card">\n  <div class="cal-head">\n    <a class="cal-nav" href="?month={{ prev_month }}">‹</a>\n    <h2 class="cal-title">{{ month_label }}</h2>\n    <a class="cal-nav" href="?month={{ next_month }}">›</a>\n  </div>\n  <div class="cal-grid">\n    {% for d in [\'Mon\',\'Tue\',\'Wed\',\'Thu\',\'Fri\',\'Sat\',\'Sun\'] %}\n      <div class="cal-dow">{{ d }}</div>\n    {% endfor %}\n    {% for week in weeks %}\n      {% for c in week %}\n        <div class="cal-day {{ c.state }} {{ \'\' if c.in_month else \'muted\' }} {{ \'today\' if c.key == today }}"\n             title="{{ c.key }}{% if c.status %} · {{ c.status }}{% endif %}">\n          <span class="cal-num">{{ c.day.day }}</span>\n          {% if c.status %}<span class="cal-meta">{{ c.status }}</span>{% endif %}\n        </div>\n      {% endfor %}\n    {% endfor %}\n  </div>\n  <div class="cal-key">\n    <span><i class="k full"></i> present</span>\n    <span><i class="k absent"></i> absent</span>\n    <span><i class="k partial"></i> leave / late</span>\n    <span><i class="k none"></i> not marked</span>\n  </div>\n</section>\n\n<style>\n .cal-card{padding:16px 18px}\n .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}\n .cal-title{margin:0;font-size:16px}\n .cal-nav{width:32px;height:32px;display:grid;place-items:center;border-radius:9px;\n          background:#eef2f9;color:#1f3a5f;font-size:18px;text-decoration:none}\n .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}\n .cal-dow{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#7b8aa3;\n          text-align:center;padding-bottom:4px}\n .cal-day{min-height:56px;border-radius:10px;padding:6px 8px;display:flex;\n          flex-direction:column;justify-content:space-between;border:1px solid transparent}\n .cal-num{font-weight:700;font-size:13px}\n .cal-meta{font-size:10px;opacity:.9}\n .cal-day.full{background:#dcf5e6;border-color:#a7e0bf;color:#0f5132}\n .cal-day.partial{background:#fdf0d5;border-color:#f0cf95;color:#7a4b06}\n .cal-day.absent{background:#fde2e2;border-color:#f3b4b4;color:#7f1d1d}\n .cal-day.none{background:#f1f4f9;border-color:#e3e8f0;color:#8a94a6}\n .cal-day.muted{opacity:.35}\n .cal-day.today{outline:2px solid #2f6ea8;outline-offset:1px}\n .cal-key{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;color:#64748b}\n .cal-key i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px}\n .k.full{background:#dcf5e6}.k.partial{background:#fdf0d5}\n .k.absent{background:#fde2e2}.k.none{background:#f1f4f9}\n</style>\n\n<section class="card">\n  <div class="kv">\n    <div><span>Days recorded</span><strong>{{ total }}</strong></div>\n    <div><span>Present</span><strong>{{ present }}</strong></div>\n    <div><span>Attendance</span><strong>{{ pct }}%</strong></div>\n  </div>\n</section>\n\n<section class="card">\n  <h2 class="card-title">Day by day</h2>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Date</th><th>Status</th><th>Remarks</th></tr></thead>\n      <tbody>\n      {% for r in rows %}\n        <tr>\n          <td>{{ disp_date(r.att_date) }}</td>\n          <td>{% if r.status == \'Present\' %}<span class="pill ok">Present</span>\n              {% elif r.status == \'Late\' %}<span class="pill warn">Late</span>\n              {% elif r.status == \'Leave\' %}<span class="pill warn">Leave</span>\n              {% else %}<span class="pill bad">Absent</span>{% endif %}</td>\n          <td>{{ r.remarks or \'\' }}</td>\n        </tr>\n      {% else %}\n        <tr><td colspan="3" class="muted">No attendance recorded yet.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
     'my_homework.html':
         '{% extends "base.html" %}\n{% block title %}Homework{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Homework</h1><p>{{ student.name }} · Class {{ student.class_name }}{% if student.section %} – {{ student.section }}{% endif %}</p></div>\n</header>\n\n{% for h in homework %}\n<section class="card">\n  <h2 class="card-title">{{ h.title }}</h2>\n  <p class="muted">{{ h.subject_name or \'General\' }} · due {{ disp_date(h.due_date) or \'—\' }}</p>\n  {% if h.details %}<p>{{ h.details }}</p>{% endif %}\n</section>\n{% else %}\n<section class="card"><p class="muted">No homework has been set for your class yet.</p></section>\n{% endfor %}\n{% endblock %}\n',
     'notices.html':
@@ -2111,9 +2111,42 @@ def my_attendance():
     total = len(rows)
     present = sum(1 for r in rows if r["status"] in ("Present", "Late"))
     pct = round(present / total * 100, 1) if total else 0
+    # ---- the student's own month calendar ----
+    month = (request.args.get("month") or datetime.now().strftime("%Y-%m")).strip()
+    try:
+        year, mon = [int(x) for x in month.split("-")]
+    except Exception:                        # noqa: BLE001
+        year, mon = datetime.now().year, datetime.now().month
+    month = f"{year:04d}-{mon:02d}"
+    mine = {r["att_date"]: r["status"] for r in query(
+        "SELECT att_date, status FROM attendance WHERE student_id=?"
+        " AND att_date LIKE ?", (student["id"], month + "%"))}
+    weeks = []
+    for wk in pycalendar.Calendar(firstweekday=0).monthdatescalendar(year, mon):
+        week = []
+        for d_ in wk:
+            key = d_.strftime("%Y-%m-%d")
+            status = mine.get(key)
+            if status in ("Present", "Late"):
+                state = "full"
+            elif status == "Absent":
+                state = "absent"
+            elif status == "Leave":
+                state = "partial"
+            else:
+                state = "none"
+            week.append({"day": d_, "in_month": d_.month == mon, "key": key,
+                         "state": state, "status": status or ""})
+        weeks.append(week)
+    prev_m = (datetime(year, mon, 1) - timedelta(days=1)).strftime("%Y-%m")
+    next_m = (datetime(year, mon, 28) + timedelta(days=7)).strftime("%Y-%m")
+
     return render_template("my_attendance.html", student=student, rows=rows,
                            total=total, present=present, pct=pct,
-                           disp_date=disp_date)
+                           disp_date=disp_date, weeks=weeks, month=month,
+                           month_label=pycalendar.month_name[mon] + " " + str(year),
+                           prev_month=prev_m, next_month=next_m,
+                           today=datetime.now().strftime("%Y-%m-%d"))
 
 
 @app.route("/my-homework")
