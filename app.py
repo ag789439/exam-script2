@@ -31,6 +31,8 @@ import base64
 import calendar as pycalendar
 import csv
 import gzip
+import hashlib
+import hmac
 import io
 import json
 import os
@@ -160,9 +162,9 @@ TEMPLATES = {
     'doubts.html':
         '{% extends "base.html" %}\n{% block title %}Doubts{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Student doubts</h1><p>Questions from the subjects you teach</p></div>\n  {% if open_count %}<div class="actions"><span class="tag warn">{{ open_count }} open</span></div>{% endif %}\n</header>\n\n<section class="card">\n  {% for d in rows %}\n    <div class="doubt {{ \'open\' if d.status == \'Open\' }}">\n      <div class="doubt-head">\n        <div>\n          <span class="subj">{{ d.subject_code or \'General\' }}</span>\n          <strong>{{ d.name }}</strong>\n          <span class="meta">Class {{ d.class_name|roman }}{% if d.section %} – {{ d.section }}{% endif %} · Roll {{ d.roll_no }} · {{ d.asked_on[:10] }}</span>\n        </div>\n        {% if d.status == \'Open\' %}<span class="tag warn">Open</span>{% else %}<span class="tag ok">Answered</span>{% endif %}\n      </div>\n      {% if d.question and d.question != \'(photo)\' %}<p class="q">{{ d.question }}</p>{% endif %}\n      {% if d.photo %}<a href="{{ d.photo }}" target="_blank">\n        <img class="doubt-photo" src="{{ d.photo }}" alt="question photo"></a>{% endif %}\n      <a class="btn ghost small" style="margin-top:8px"\n         href="{{ url_for(\'doubt_call\', did=d.id) }}">Start video call</a>\n      {% if d.answer %}\n        <div class="ans"><strong>Your answer</strong><p>{{ d.answer }}</p>\n          {% if d.answer_photo %}<a href="{{ d.answer_photo }}" target="_blank">\n            <img class="doubt-photo" src="{{ d.answer_photo }}" alt="answer photo"></a>{% endif %}\n        </div>\n      {% else %}\n        <form method="post" enctype="multipart/form-data" class="reply">\n          <input type="hidden" name="id" value="{{ d.id }}">\n          <textarea name="answer" rows="2" placeholder="Write the answer…"></textarea>\n          <div class="reply-side">\n            <input type="file" name="answer_photo" accept="image/*">\n            <button class="btn primary small" type="submit">Send answer</button>\n          </div>\n        </form>\n      {% endif %}\n    </div>\n  {% else %}\n    <p class="muted">No doubts yet.</p>\n  {% endfor %}\n</section>\n\n<style>\n .doubt{border:1px solid var(--line,#e6e1d4);border-radius:14px;padding:14px 16px;margin-bottom:12px;background:#fffdf7}\n .doubt.open{border-left:4px solid #e07a2f}\n .doubt-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}\n .doubt-head strong{display:block;margin-top:4px;color:#1b2a5e}\n .subj{display:inline-block;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;\n       background:#f1eee6;color:#1b2a5e;padding:2px 8px;border-radius:99px}\n .meta{display:block;font-size:11.5px;color:var(--muted,#6f6a86);margin-top:2px}\n .q{margin:10px 0 8px;font-size:14px}\n .doubt-photo{display:block;max-width:300px;max-height:240px;margin:6px 0 10px;border-radius:10px;\n              border:1px solid #e6e1d4;object-fit:cover}\n .reply{display:flex;gap:8px;align-items:flex-start;margin-top:8px;flex-wrap:wrap}\n .reply-side{display:flex;flex-direction:column;gap:6px}\n .reply textarea{flex:1;padding:8px 10px;border-radius:10px;border:1px solid var(--line,#e6e1d4);font-size:13px}\n .ans{margin-top:8px;padding:10px 12px;border-radius:10px;background:#eef6f1;border:1px solid #cfe6dc}\n .ans strong{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#1f7a4d}\n .ans p{margin:5px 0 0;font-size:13.5px}\n</style>\n{% endblock %}\n',
     'my_doubts.html':
-        '{% extends "base.html" %}\n{% block title %}My doubts{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Doubt portal</h1><p>Ask your subject teacher - the answer appears here</p></div>\n</header>\n\n<section class="card">\n  <h2 class="card-title">Ask a doubt</h2>\n  <form method="post" enctype="multipart/form-data" class="form-grid">\n    <label>Subject\n      <select name="subject_id">\n        <option value="">— general —</option>\n        {% for s in subjects %}<option value="{{ s.id }}">{{ s.subject_code }} · {{ s.subject_name }}</option>{% endfor %}\n      </select>\n    </label>\n    <label class="wide">Write your question\n      <textarea name="question" rows="3"\n                placeholder="e.g. I did not understand example 3 of chapter 4"></textarea>\n    </label>\n    <label class="wide">…or upload a photo of the question\n      <input type="file" name="photo" accept="image/*" capture="environment">\n    </label>\n    <div class="form-actions"><button class="btn primary" type="submit">Send to teacher</button></div>\n  </form>\n  <p class="muted">Type your question, or upload a photo (or do both).</p>\n</section>\n\n<section class="card">\n  <h2 class="card-title">My questions</h2>\n  {% for d in rows %}\n    <div class="doubt {{ \'open\' if d.status == \'Open\' }}">\n      <div class="doubt-q">\n        <span class="subj">{{ d.subject_code or \'General\' }}</span>\n        {% if d.question and d.question != \'(photo)\' %}<p>{{ d.question }}</p>{% endif %}\n        {% if d.photo %}<a href="{{ d.photo }}" target="_blank">\n          <img class="doubt-photo" src="{{ d.photo }}" alt="question photo"></a>{% endif %}\n        <span class="meta">{{ d.asked_on[:10] }}\n          {% if d.status == \'Open\' %}· <em>waiting for answer</em>\n          {% elif d.teacher %}· answered by {{ d.teacher }}{% endif %}</span>\n      </div>\n      {% if d.answer %}\n      <div class="doubt-a"><strong>Teacher\'s answer</strong><p>{{ d.answer }}</p>\n        {% if d.answer_photo %}<a href="{{ d.answer_photo }}" target="_blank">\n          <img class="doubt-photo" src="{{ d.answer_photo }}" alt="answer photo"></a>{% endif %}\n      </div>\n      {% endif %}\n      {% if d.ai_answer %}\n      <div class="doubt-ai"><strong>AI helper</strong><p>{{ d.ai_answer }}</p></div>\n      {% endif %}\n      <div class="doubt-actions">\n        <form method="post" action="{{ url_for(\'doubt_ai\', did=d.id) }}">\n          <button class="btn primary small" type="submit">\n            {% if d.ai_answer %}Ask AI again{% else %}Ask AI helper{% endif %}\n          </button>\n        </form>\n        <a class="btn ghost small" href="{{ url_for(\'doubt_call\', did=d.id) }}">Video call with teacher</a>\n      </div>\n    </div>\n  {% else %}\n    <p class="muted">You have not asked anything yet.</p>\n  {% endfor %}\n</section>\n\n<style>\n .doubt{border:1px solid var(--line,#e6e1d4);border-radius:14px;padding:14px 16px;margin-bottom:12px;\n        background:#fffdf7}\n .doubt.open{border-left:4px solid #e07a2f}\n .subj{display:inline-block;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;\n       background:#f1eee6;color:#1b2a5e;padding:2px 8px;border-radius:99px;margin-bottom:6px}\n .doubt-q p{margin:0;font-size:14px;color:#22203a}\n .meta{font-size:11.5px;color:var(--muted,#6f6a86)}\n .doubt-a{margin-top:10px;padding:10px 12px;border-radius:10px;background:#eef6f1;\n          border:1px solid #cfe6dc}\n .doubt-a strong{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#1f7a4d}\n .doubt-a p{margin:5px 0 0;font-size:13.5px}\n .doubt-photo{display:block;max-width:260px;max-height:200px;margin-top:8px;border-radius:10px;\n              border:1px solid #e6e1d4;object-fit:cover}\n .doubt-ai{margin-top:10px;padding:10px 12px;border-radius:10px;background:#eef2ff;\n           border:1px solid #d6ddf7}\n .doubt-ai strong{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#3949ab}\n .doubt-ai p{margin:5px 0 0;font-size:13.5px;white-space:pre-wrap}\n .doubt-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}\n</style>\n{% endblock %}\n',
+        '{% extends "base.html" %}\n{% block title %}My doubts{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Doubt portal</h1><p>Ask your subject teacher - the answer appears here</p></div>\n</header>\n\n<section class="card ai-card">\n  <div class="ai-head">\n    <div>\n      <h2 class="card-title">Ask the AI teacher</h2>\n      <p class="muted">Instant answer, any time. Up to 10 questions a day.</p>\n    </div>\n    <a class="btn ghost small" href="{{ url_for(\'call_teacher\') }}">Video call with teacher</a>\n  </div>\n  <form method="post" action="{{ url_for(\'ai_chat\') }}" class="ai-form">\n    <input name="question" placeholder="Type your question… e.g. explain photosynthesis in simple words"\n           autocomplete="off" required>\n    <button class="btn primary" type="submit">Ask AI</button>\n  </form>\n  {% if not ai_ready %}\n  <p class="muted" style="margin-top:8px;font-size:12.5px">\n    AI helper is not switched on yet — the school office needs to add an AI_API_KEY.\n  </p>\n  {% endif %}\n\n  {% for c in chats %}\n    <div class="ai-turn">\n      <p class="ai-q"><strong>You:</strong> {{ c.question }}</p>\n      <p class="ai-a"><strong>AI:</strong> {{ c.answer }}</p>\n    </div>\n  {% endfor %}\n</section>\n\n<section class="card">\n  <h2 class="card-title">Ask a doubt</h2>\n  <form method="post" enctype="multipart/form-data" class="form-grid">\n    <label>Subject\n      <select name="subject_id">\n        <option value="">— general —</option>\n        {% for s in subjects %}<option value="{{ s.id }}">{{ s.subject_code }} · {{ s.subject_name }}</option>{% endfor %}\n      </select>\n    </label>\n    <label class="wide">Write your question\n      <textarea name="question" rows="3"\n                placeholder="e.g. I did not understand example 3 of chapter 4"></textarea>\n    </label>\n    <label class="wide">…or upload a photo of the question\n      <input type="file" name="photo" accept="image/*" capture="environment">\n    </label>\n    <div class="form-actions"><button class="btn primary" type="submit">Send to teacher</button></div>\n  </form>\n  <p class="muted">Type your question, or upload a photo (or do both).</p>\n</section>\n\n<section class="card">\n  <h2 class="card-title">My questions</h2>\n  {% for d in rows %}\n    <div class="doubt {{ \'open\' if d.status == \'Open\' }}">\n      <div class="doubt-q">\n        <span class="subj">{{ d.subject_code or \'General\' }}</span>\n        {% if d.question and d.question != \'(photo)\' %}<p>{{ d.question }}</p>{% endif %}\n        {% if d.photo %}<a href="{{ d.photo }}" target="_blank">\n          <img class="doubt-photo" src="{{ d.photo }}" alt="question photo"></a>{% endif %}\n        <span class="meta">{{ d.asked_on[:10] }}\n          {% if d.status == \'Open\' %}· <em>waiting for answer</em>\n          {% elif d.teacher %}· answered by {{ d.teacher }}{% endif %}</span>\n      </div>\n      {% if d.answer %}\n      <div class="doubt-a"><strong>Teacher\'s answer</strong><p>{{ d.answer }}</p>\n        {% if d.answer_photo %}<a href="{{ d.answer_photo }}" target="_blank">\n          <img class="doubt-photo" src="{{ d.answer_photo }}" alt="answer photo"></a>{% endif %}\n      </div>\n      {% endif %}\n      {% if d.ai_answer %}\n      <div class="doubt-ai"><strong>AI helper</strong><p>{{ d.ai_answer }}</p></div>\n      {% endif %}\n      <div class="doubt-actions">\n        <form method="post" action="{{ url_for(\'doubt_ai\', did=d.id) }}">\n          <button class="btn primary small" type="submit">\n            {% if d.ai_answer %}Ask AI again{% else %}Ask AI helper{% endif %}\n          </button>\n        </form>\n        <a class="btn ghost small" href="{{ url_for(\'doubt_call\', did=d.id) }}">Video call with teacher</a>\n      </div>\n    </div>\n  {% else %}\n    <p class="muted">You have not asked anything yet.</p>\n  {% endfor %}\n</section>\n\n<style>\n .doubt{border:1px solid var(--line,#e6e1d4);border-radius:14px;padding:14px 16px;margin-bottom:12px;\n        background:#fffdf7}\n .doubt.open{border-left:4px solid #e07a2f}\n .subj{display:inline-block;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;\n       background:#f1eee6;color:#1b2a5e;padding:2px 8px;border-radius:99px;margin-bottom:6px}\n .doubt-q p{margin:0;font-size:14px;color:#22203a}\n .meta{font-size:11.5px;color:var(--muted,#6f6a86)}\n .doubt-a{margin-top:10px;padding:10px 12px;border-radius:10px;background:#eef6f1;\n          border:1px solid #cfe6dc}\n .doubt-a strong{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#1f7a4d}\n .doubt-a p{margin:5px 0 0;font-size:13.5px}\n .doubt-photo{display:block;max-width:260px;max-height:200px;margin-top:8px;border-radius:10px;\n              border:1px solid #e6e1d4;object-fit:cover}\n .doubt-ai{margin-top:10px;padding:10px 12px;border-radius:10px;background:#eef2ff;\n           border:1px solid #d6ddf7}\n .doubt-ai strong{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#3949ab}\n .doubt-ai p{margin:5px 0 0;font-size:13.5px;white-space:pre-wrap}\n .doubt-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}\n .ai-card{background:linear-gradient(160deg,#fdf8ff,#f4f6ff);border-color:#dfe3f5}\n .ai-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}\n .ai-form{display:flex;gap:8px;margin-top:10px}\n .ai-form input{flex:1;padding:11px 14px;border-radius:12px;border:1px solid #dfe3f5;font-size:14px}\n .ai-turn{margin-top:12px;padding:10px 12px;border-radius:12px;background:#fff;\n          border:1px solid #e6e1f0}\n .ai-turn p{margin:2px 0;font-size:13.5px}\n .ai-q strong{color:#1b2a5e}\n .ai-a strong{color:#3949ab}\n .ai-a{white-space:pre-wrap}\n</style>\n{% endblock %}\n',
     'doubt_call.html':
-        '{% extends "base.html" %}\n{% block title %}Video call{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div>\n    <h1>Video call · {{ subject }}</h1>\n    <p>{{ row.name }} · Class {{ row.class_name|roman }}{% if row.section %} – {{ row.section }}{% endif %} · Roll {{ row.roll_no }}</p>\n  </div>\n  <div class="actions">\n    <a class="btn ghost" target="_blank"\n       href="https://meet.jit.si/{{ room }}" rel="noopener">Open in new tab</a>\n    {% if is_student %}<a class="btn ghost" href="{{ url_for(\'my_doubts\') }}">Back</a>\n    {% else %}<a class="btn ghost" href="{{ url_for(\'doubts\') }}">Back</a>{% endif %}\n  </div>\n</header>\n\n<section class="card" style="padding:0;overflow:hidden">\n  <iframe class="call-frame"\n          src="https://meet.jit.si/{{ room }}#userInfo.displayName=%22{{ (current_user.full_name or current_user.username)|urlencode }}%22&config.prejoinPageEnabled=false"\n          allow="camera; microphone; fullscreen; display-capture; autoplay"\n          title="Video call"></iframe>\n</section>\n\n<p class="muted" style="margin-top:10px">\n  Camera aur microphone ki permission dein. Room private hai — sirf aap dono ke paas yahi link hai.\n  Room: <code>{{ room }}</code>\n</p>\n\n<style>\n .call-frame{width:100%;height:min(78vh,720px);border:0;display:block;background:#0b1220}\n @media print{.call-frame{display:none}}\n</style>\n{% endblock %}\n',
+        '{% extends "base.html" %}\n{% block title %}Video call{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div>\n    <h1>Video call · {{ subject }}</h1>\n    <p>{{ row.name }} · Class {{ row.class_name|roman }}{% if row.section %} – {{ row.section }}{% endif %} · Roll {{ row.roll_no }}</p>\n  </div>\n  <div class="actions">\n    <a class="btn ghost" target="_blank" href="{{ call_url }}" rel="noopener">Open in new tab</a>\n    {% if is_student %}<a class="btn ghost" href="{{ url_for(\'my_doubts\') }}">Back</a>\n    {% else %}<a class="btn ghost" href="{{ url_for(\'doubts\') }}">Back</a>{% endif %}\n  </div>\n</header>\n\n<div class="call-note {{ \'mod\' if moderator else \'\' }}">\n  {% if moderator %}\n    <strong>You are the moderator.</strong>\n    You can mute anyone, stop their camera and remove them from the call.\n    {% if not token_mode %}Join first — the first person in the room becomes moderator.{% endif %}\n  {% else %}\n    <strong>Waiting for your teacher.</strong>\n    The teacher joins as moderator and can manage the call.\n  {% endif %}\n  <span class="room">Room: {{ room }}</span>\n</div>\n\n<section class="card" style="padding:0;overflow:hidden">\n  <iframe class="call-frame" src="{{ call_url }}"\n          allow="camera; microphone; fullscreen; display-capture; autoplay"\n          title="Video call"></iframe>\n</section>\n\n<p class="muted" style="margin-top:10px">\n  Allow camera and microphone when the browser asks. The room is private —\n  only the two of you have this link.\n</p>\n\n<style>\n .call-note{display:flex;justify-content:space-between;align-items:center;gap:12px;\n            flex-wrap:wrap;margin-bottom:12px;padding:11px 16px;border-radius:12px;\n            background:#fdf8ee;border:1px solid #e6d5b4;font-size:13px;color:#6b4b1d}\n .call-note.mod{background:#eef6f1;border-color:#cfe6dc;color:#1f5d3f}\n .call-note strong{margin-right:4px}\n .call-note .room{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.7}\n .call-frame{width:100%;height:min(78vh,720px);border:0;display:block;background:#0b1220}\n @media print{.call-frame{display:none}}\n</style>\n{% endblock %}\n',
     'audit.html':
         '{% extends "base.html" %}\n{% block title %}Audit log{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Audit log</h1><p>Who changed what, and when</p></div>\n</header>\n<section class="card">\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>When</th><th>User</th><th>Action</th><th>Detail</th></tr></thead>\n      <tbody>\n      {% for r in rows %}\n        <tr><td>{{ r.at }}</td><td>{{ r.who }}</td><td>{{ r.action }}</td>\n            <td class="muted">{{ r.detail or \'\' }}</td></tr>\n      {% else %}\n        <tr><td colspan="4" class="empty">Nothing recorded yet.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
     'forgot.html':
@@ -573,6 +575,14 @@ CREATE TABLE IF NOT EXISTS leave_requests (
     decided_by  INTEGER,
     decided_on  TEXT,
     remark      TEXT
+);
+
+CREATE TABLE IF NOT EXISTS ai_chats (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL,
+    question   TEXT NOT NULL,
+    answer     TEXT,
+    asked_on   TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS otp_codes (
@@ -1146,6 +1156,7 @@ def load_user():
                             "forgot", "forgot_verify",
                             "report_card", "my_leave", "events", "my_profile", "my_doubts",
                             "doubt_call", "doubt_ai", "homework_done",
+                            "ai_chat", "call_teacher",
                             "leave_detail"):
         return None
     if g.user is None:
@@ -1159,7 +1170,8 @@ def load_user():
             return redirect(url_for("my_result"))
         if (request.method not in ("GET", "HEAD")
                 and request.endpoint not in ("password", "my_leave",
-                                             "my_doubts", "homework_done")):
+                                             "my_doubts", "homework_done",
+                                             "ai_chat", "call_teacher")):
             flash("A student account can only view results.", "error")
             return redirect(url_for("my_result"))
     return None
@@ -1280,6 +1292,47 @@ def audit(action, detail=""):
                  (detail or "")[:300]))
     except Exception:                        # noqa: BLE001
         pass
+
+
+# ---- Jitsi video rooms (optional moderator tokens) ---------------------
+JITSI_DOMAIN = os.environ.get("JITSI_DOMAIN", "meet.jit.si").strip()
+JITSI_APP_ID = os.environ.get("JITSI_APP_ID", "").strip()
+JITSI_SECRET = os.environ.get("JITSI_SECRET", "").strip()
+
+
+def _b64url(raw):
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def jitsi_token(room, name, email="", moderator=False):
+    """A signed JaaS token, or None when no Jitsi keys are configured."""
+    if not (JITSI_APP_ID and JITSI_SECRET):
+        return None
+    now = int(datetime.now().timestamp())
+    header = {"alg": "HS256", "typ": "JWT", "kid": f"{JITSI_APP_ID}/"
+              + ("moderator" if moderator else "participant")}
+    payload = {
+        "aud": "jitsi", "iss": "chat", "sub": JITSI_DOMAIN,
+        "room": room, "iat": now, "nbf": now - 10, "exp": now + 3 * 3600,
+        "context": {"user": {"name": name, "email": email,
+                             "moderator": bool(moderator)}},
+    }
+    signing = _b64url(json.dumps(header, separators=(",", ":")).encode()) + \
+        "." + _b64url(json.dumps(payload, separators=(",", ":")).encode())
+    sig = hmac.new(JITSI_SECRET.encode(), signing.encode(),
+                   hashlib.sha256).digest()
+    return signing + "." + _b64url(sig)
+
+
+def jitsi_url(room, name, moderator=False, email=""):
+    """Full URL for the iframe, with a moderator token when available."""
+    token = jitsi_token(room, name, email, moderator)
+    if token:
+        return f"https://8x8.vc/{JITSI_APP_ID}/{room}?jwt={token}"
+    safe = urllib.parse.quote(name or "Guest")
+    return (f"https://{JITSI_DOMAIN}/{room}"
+            f"#userInfo.displayName=%22{safe}%22"
+            "&config.prejoinPageEnabled=false")
 
 
 def initials_avatar(name):
@@ -4308,8 +4361,14 @@ def doubt_call(did):
     if not room:
         room = "EuphoricDoubt" + str(did) + secrets.token_hex(3)
         execute("UPDATE doubts SET call_room=? WHERE id=?", (room, did))
+    me = getattr(g, "user", None)
+    my_name = ((me["full_name"] or me["username"]) if me else "Guest")
+    moderator = not is_student()
     return render_template("doubt_call.html", row=row, room=room,
-                           is_student=is_student(),
+                           is_student=is_student(), moderator=moderator,
+                           my_name=my_name,
+                           call_url=jitsi_url(room, my_name, moderator),
+                           token_mode=bool(JITSI_APP_ID and JITSI_SECRET),
                            subject=row["subject_name"] or "General")
 
 
@@ -4344,6 +4403,55 @@ def doubt_ai(did):
     return redirect(url_for("my_doubts"))
 
 
+@app.route("/ai-chat", methods=["POST"])
+def ai_chat():
+    """A quick AI chat box for students (not tied to a doubt)."""
+    if not is_student():
+        flash("The AI helper is for students.", "error")
+        return redirect(url_for("dashboard"))
+    student = my_student()
+    if student is None:
+        return redirect(url_for("my_result"))
+    q = (request.form.get("question") or "").strip()
+    if not q:
+        flash("Type a question first.", "error")
+        return redirect(url_for("my_doubts"))
+    today = datetime.now().strftime("%Y-%m-%d")
+    used = query("SELECT COUNT(*) c FROM ai_chats WHERE student_id=?"
+                 " AND asked_on LIKE ?", (student["id"], today + "%"),
+                 one=True)["c"]
+    if used >= 10:
+        flash("You have used the AI helper 10 times today. Try tomorrow, "
+              "or ask your teacher.", "error")
+        return redirect(url_for("my_doubts"))
+    text, err = ai_ask(q, "", student["class_name"] or "")
+    if err:
+        flash(err, "error")
+    else:
+        execute("INSERT INTO ai_chats (student_id, question, answer)"
+                " VALUES (?,?,?)", (student["id"], q, text))
+    return redirect(url_for("my_doubts"))
+
+
+@app.route("/call/teacher")
+def call_teacher():
+    """A standing video room between a student and their class teacher."""
+    if not is_student():
+        return redirect(url_for("doubts"))
+    student = my_student()
+    if student is None:
+        return redirect(url_for("my_result"))
+    room = "EuphoricClass" + str(student["id"])
+    row = {"name": student["name"], "class_name": student["class_name"],
+           "section": student["section"], "roll_no": student["roll_no"]}
+    return render_template("doubt_call.html", row=row, room=room,
+                           is_student=True, moderator=False,
+                           my_name=student["name"],
+                           call_url=jitsi_url(room, student["name"], False),
+                           token_mode=bool(JITSI_APP_ID and JITSI_SECRET),
+                           subject="Class teacher")
+
+
 @app.route("/my-doubts", methods=["GET", "POST"])
 def my_doubts():
     if not is_student():
@@ -4373,8 +4481,11 @@ def my_doubts():
                     WHERE d.student_id=? ORDER BY d.id DESC""",
                  (student["id"],))
     subjects = subjects_for_class(student["class_name"] or "")
+    chats = query("SELECT * FROM ai_chats WHERE student_id=?"
+                  " ORDER BY id DESC LIMIT 10", (student["id"],))
     return render_template("my_doubts.html", student=student, rows=rows,
-                           subjects=subjects, disp_date=disp_date)
+                           subjects=subjects, chats=chats,
+                           ai_ready=bool(AI_API_KEY), disp_date=disp_date)
 
 
 # --------------------------------------------------------------------------
