@@ -100,7 +100,7 @@ TEMPLATES = {
     'attendance.html':
         '{% extends "base.html" %}\n{% block title %}Attendance{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Attendance</h1><p>Mark the daily register for a class{% if scope %} · your class: {{ scope[0] }}{% if scope[1] %} – {{ scope[1] }}{% endif %}{% endif %}</p></div>\n</header>\n\n\n<section class="card cal-card">\n  <div class="cal-head">\n    <a class="cal-nav" href="?class_name={{ cls }}&section={{ sec }}&month={{ prev_month }}">‹</a>\n    <h2 class="cal-title">{{ month_label }}</h2>\n    <a class="cal-nav" href="?class_name={{ cls }}&section={{ sec }}&month={{ next_month }}">›</a>\n  </div>\n  <div class="cal-grid">\n    {% for d in [\'Mon\',\'Tue\',\'Wed\',\'Thu\',\'Fri\',\'Sat\',\'Sun\'] %}\n      <div class="cal-dow">{{ d }}</div>\n    {% endfor %}\n    {% for week in weeks %}\n      {% for c in week %}\n        <a class="cal-day {{ c.state }} {{ \'\' if c.in_month else \'muted\' }} {{ \'today\' if c.key == today }}"\n           href="?class_name={{ cls }}&section={{ sec }}&att_date={{ c.key }}&month={{ month }}"\n           title="{{ c.key }}{% if c.n %} · {{ c.p }}/{{ c.n }} present{% endif %}">\n          <span class="cal-num">{{ c.day.day }}</span>\n          {% if c.n %}<span class="cal-meta">{{ c.p }}/{{ c.n }}</span>{% endif %}\n        </a>\n      {% endfor %}\n    {% endfor %}\n  </div>\n  <div class="cal-key">\n    <span><i class="k full"></i> all present</span>\n    <span><i class="k partial"></i> some absent</span>\n    <span><i class="k absent"></i> all absent</span>\n    <span><i class="k none"></i> not marked</span>\n  </div>\n</section>\n\n<style>\n .cal-card{padding:16px 18px}\n .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}\n .cal-title{margin:0;font-size:16px;letter-spacing:.02em}\n .cal-nav{width:32px;height:32px;display:grid;place-items:center;border-radius:9px;\n          background:#eef2f9;color:#1f3a5f;font-size:18px;text-decoration:none}\n .cal-nav:hover{background:#dde7f6}\n .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}\n .cal-dow{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#7b8aa3;\n          text-align:center;padding-bottom:4px}\n .cal-day{min-height:56px;border-radius:10px;padding:6px 8px;text-decoration:none;\n          color:#0f172a;display:flex;flex-direction:column;justify-content:space-between;\n          border:1px solid transparent;transition:.15s}\n .cal-day:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(15,23,42,.10)}\n .cal-num{font-weight:700;font-size:13px}\n .cal-meta{font-size:10.5px;opacity:.85}\n .cal-day.full{background:#dcf5e6;border-color:#a7e0bf;color:#0f5132}\n .cal-day.partial{background:#fdf0d5;border-color:#f0cf95;color:#7a4b06}\n .cal-day.absent{background:#fde2e2;border-color:#f3b4b4;color:#7f1d1d}\n .cal-day.none{background:#f1f4f9;border-color:#e3e8f0;color:#8a94a6}\n .cal-day.muted{opacity:.35}\n .cal-day.today{outline:2px solid #2f6ea8;outline-offset:1px}\n .cal-key{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;color:#64748b}\n .cal-key i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px}\n .k.full{background:#dcf5e6}.k.partial{background:#fdf0d5}\n .k.absent{background:#fde2e2}.k.none{background:#f1f4f9}\n @media print{.cal-nav{display:none}}\n</style>\n\n<section class="card">\n  <form class="form-grid" method="get">\n    <label>Class\n      <select name="class_name" onchange="this.form.submit()">\n        <option value="">— choose —</option>\n        {% for c in classes %}<option value="{{ c }}" {{ \'selected\' if cls == c }}>{{ c }}</option>{% endfor %}\n      </select>\n    </label>\n    <label>Section\n      <select name="section" onchange="this.form.submit()">\n        <option value="">all</option>\n        {% for s in sections %}<option value="{{ s }}" {{ \'selected\' if sec == s }}>{{ s }}</option>{% endfor %}\n      </select>\n    </label>\n    <label>Date\n      <input type="date" name="att_date" value="{{ day }}" onchange="this.form.submit()">\n    </label>\n    <div class="form-actions"><button class="btn primary" type="submit">Show</button></div>\n  </form>\n</section>\n\n{% if students %}\n<form method="post">\n  <input type="hidden" name="class_name" value="{{ cls }}">\n  <input type="hidden" name="section" value="{{ sec }}">\n  <input type="hidden" name="att_date" value="{{ day }}">\n  <section class="card">\n    <h2 class="card-title">{{ cls }}{% if sec %} – {{ sec }}{% endif %} · {{ disp_date(day) }}</h2>\n    <div class="table-wrap">\n      <table class="grid">\n        <thead><tr><th>Roll</th><th>Name</th><th>Present</th><th>Absent</th>\n                   <th>Late</th><th>Leave</th><th>Remarks</th></tr></thead>\n        <tbody>\n        {% for s in students %}\n          {% set m = marks.get(s.id) %}\n          <tr>\n            <td>{{ s.roll_no }}</td>\n            <td>{{ s.name }}</td>\n            {% for st in statuses %}\n            <td><input type="radio" name="status_{{ s.id }}" value="{{ st }}"\n                 {{ \'checked\' if (m and m.status == st) or (not m and st == \'Present\') }}></td>\n            {% endfor %}\n            <td><input name="remarks_{{ s.id }}" value="{{ m.remarks if m and m.remarks else \'\' }}" placeholder="—"></td>\n          </tr>\n        {% endfor %}\n        </tbody>\n      </table>\n    </div>\n    <div class="form-actions"><button class="btn primary" type="submit">Save attendance</button></div>\n  </section>\n</form>\n{% elif cls %}\n<section class="card"><p class="muted">No active students in this class.</p></section>\n{% endif %}\n{% endblock %}\n',
     'homework.html':
-        '{% extends "base.html" %}\n{% block title %}Homework{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Homework</h1><p>What each class has to do, and by when</p></div>\n</header>\n\n<section class="card">\n  <h2 class="card-title">Set homework</h2>\n  <form class="form-grid" method="post">\n    <label>Class\n      <select name="class_name" required>\n        <option value="">— choose —</option>\n        {% for c in classes %}<option value="{{ c }}" {{ \'selected\' if scope and scope[0] == c }}>{{ c }}</option>{% endfor %}\n      </select>\n    </label>\n    <label>Section <input name="section" placeholder="A" value="{{ scope[1] if scope else \'\' }}"></label>\n    <label>Subject\n      <select name="subject_id">\n        <option value="">—</option>\n        {% for s in subjects %}<option value="{{ s.id }}">{{ s.subject_code }} · {{ s.subject_name }}</option>{% endfor %}\n      </select>\n    </label>\n    <label>Due date <input type="date" name="due_date"></label>\n    <label class="wide">Title <input name="title" required placeholder="e.g. Exercise 8.2 question 1 to 10"></label>\n    <label class="wide">Details <textarea name="details" rows="2" placeholder="Instructions for the students"></textarea></label>\n    <div class="form-actions"><button class="btn primary" type="submit">Post homework</button></div>\n  </form>\n</section>\n\n<section class="card">\n  <h2 class="card-title">Posted so far</h2>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Class</th><th>Subject</th><th>Title</th><th>Due</th><th>By</th><th></th></tr></thead>\n      <tbody>\n      {% for h in homework %}\n        <tr>\n          <td>{{ h.class_name }}{% if h.section %} – {{ h.section }}{% endif %}</td>\n          <td>{{ h.subject_name or \'—\' }}</td>\n          <td><strong>{{ h.title }}</strong>{% if h.details %}<br><span class="muted">{{ h.details }}</span>{% endif %}</td>\n          <td>{{ disp_date(h.due_date) }}</td>\n          <td>{{ h.author or \'—\' }}</td>\n          <td>\n            <form method="post" action="{{ url_for(\'homework_delete\', hid=h.id) }}">\n              <button class="btn ghost small" type="submit">Delete</button>\n            </form>\n          </td>\n        </tr>\n      {% else %}\n        <tr><td colspan="6" class="muted">Nothing posted yet.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
+        '{% extends "base.html" %}\n{% block title %}Homework{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Homework</h1><p>What each class has to do, and by when</p></div>\n</header>\n\n{% if is_admin %}\n<section class="card hw-filter">\n  <form method="get" class="form-grid">\n    <label>Show subjects for class\n      <select name="class_name" onchange="this.form.submit()">\n        <option value="">— all subjects —</option>\n        {% for c in classes %}<option value="{{ c }}" {{ \'selected\' if pick_cls == c }}>{{ c|roman }}</option>{% endfor %}\n      </select>\n    </label>\n  </form>\n</section>\n{% endif %}\n\n<section class="card">\n  <h2 class="card-title">Set homework</h2>\n  <form class="form-grid" method="post">\n    <label>Class\n      <select name="class_name" required>\n        <option value="">— choose —</option>\n        {% for c in classes %}<option value="{{ c }}" {{ \'selected\' if scope and scope[0] == c }}>{{ c }}</option>{% endfor %}\n      </select>\n    </label>\n    <label>Section <input name="section" placeholder="A" value="{{ scope[1] if scope else \'\' }}"></label>\n    <label>Subject\n      <select name="subject_id">\n        <option value="">—</option>\n        {% for s in subjects %}<option value="{{ s.id }}">{{ s.subject_code }} · {{ s.subject_name }}</option>{% endfor %}\n      </select>\n    </label>\n    <label>Due date <input type="date" name="due_date"></label>\n    <label class="wide">Title <input name="title" required placeholder="e.g. Exercise 8.2 question 1 to 10"></label>\n    <label class="wide">Details <textarea name="details" rows="2" placeholder="Instructions for the students"></textarea></label>\n    <div class="form-actions"><button class="btn primary" type="submit">Post homework</button></div>\n  </form>\n</section>\n\n<section class="card">\n  <h2 class="card-title">Posted so far</h2>\n  <div class="table-wrap">\n    <table class="grid">\n      <thead><tr><th>Class</th><th>Subject</th><th>Title</th><th>Due</th><th>By</th><th></th></tr></thead>\n      <tbody>\n      {% for h in homework %}\n        <tr>\n          <td>{{ h.class_name }}{% if h.section %} – {{ h.section }}{% endif %}</td>\n          <td>{{ h.subject_name or \'—\' }}</td>\n          <td><strong>{{ h.title }}</strong>{% if h.details %}<br><span class="muted">{{ h.details }}</span>{% endif %}</td>\n          <td>{{ disp_date(h.due_date) }}</td>\n          <td>{{ h.author or \'—\' }}</td>\n          <td style="white-space:nowrap">\n            <a class="btn ghost small"\n               href="{{ url_for(\'homework_submissions\', hid=h.id) }}">Submissions</a>\n            {% if is_admin or h.created_by == current_user.id %}\n            <form method="post" style="display:inline"\n                  action="{{ url_for(\'homework_delete\', hid=h.id) }}"\n                  onsubmit="return confirm(\'Delete this homework?\')">\n              <button class="btn danger small" type="submit">Delete</button>\n            </form>\n            {% endif %}\n          </td>\n        </tr>\n      {% else %}\n        <tr><td colspan="6" class="muted">Nothing posted yet.</td></tr>\n      {% endfor %}\n      </tbody>\n    </table>\n  </div>\n</section>\n{% endblock %}\n',
     'circulars.html':
         '{% extends "base.html" %}\n{% block title %}Circulars{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Circulars &amp; notices</h1><p>Everything the school needs to tell parents and students</p></div>\n</header>\n\n<section class="card">\n  <h2 class="card-title">Publish a circular</h2>\n  <form class="form-grid" method="post">\n    <label class="wide">Title <input name="title" required placeholder="e.g. Parent-teacher meeting"></label>\n    <label class="wide">Message <textarea name="body" rows="3" placeholder="Write the notice here"></textarea></label>\n    <label>Audience\n      <select name="audience">\n        <option value="all">Everyone</option>\n        <option value="students">Students</option>\n        <option value="parents">Parents</option>\n        <option value="teachers">Teachers</option>\n      </select>\n    </label>\n    <label>Class <input name="class_name" list="class-options" autocomplete="off"\n                        placeholder="blank = all classes"></label>\n    <datalist id="class-options"><option value="VI"><option value="VII"><option value="VIII"><option value="IX"><option value="X"><option value="XI"><option value="XII"><option value="XIII"></datalist>\n    <label>Section <input name="section" placeholder="blank = all"></label>\n    <label class="check"><input type="checkbox" name="pinned"> Pin to the top</label>\n    <div class="form-actions"><button class="btn primary" type="submit">Publish</button></div>\n  </form>\n</section>\n\n{% for c in circulars %}\n<section class="card">\n  <h2 class="card-title">{% if c.pinned %}📌 {% endif %}{{ c.title }}</h2>\n  <p class="muted">{{ c.posted_on[:10] }} · {{ c.audience }}{% if c.class_name %} · class {{ c.class_name }}{% if c.section %} – {{ c.section }}{% endif %}{% endif %} · {{ c.author or \'office\' }}</p>\n  <p>{{ c.body }}</p>\n  {% if is_admin or (current_user and c.posted_by == current_user.id) %}\n  <form method="post" action="{{ url_for(\'circular_delete\', cid=c.id) }}">\n    <button class="btn ghost small" type="submit">Delete</button>\n  </form>\n  {% endif %}\n</section>\n{% else %}\n<section class="card"><p class="muted">No circulars yet.</p></section>\n{% endfor %}\n{% endblock %}\n',
     'my_attendance.html':
@@ -2653,11 +2653,14 @@ def homework():
                     LEFT JOIN subjects s ON s.id = h.subject_id
                     LEFT JOIN users u ON u.id = h.created_by""" + where +
                  " ORDER BY h.id DESC LIMIT 100", args)
-    subjects = subjects_for_class(cls) if cls else query(
-        "SELECT * FROM subjects ORDER BY subject_code")
+    pick_cls = arabic_class(request.args.get("class_name")
+                            or (scope[0] if scope else ""))
+    subjects = (subjects_for_class(pick_cls) if pick_cls
+                else query("SELECT * FROM subjects ORDER BY subject_code"))
     classes = sorted({r["class_name"] for r in query(
         "SELECT DISTINCT class_name FROM students WHERE class_name<>''")})
     return render_template("homework.html", homework=rows, subjects=subjects,
+                           pick_cls=pick_cls,
                            classes=classes, scope=scope, disp_date=disp_date)
 
 
@@ -4842,37 +4845,34 @@ REQUIRED_TEMPLATES = ("welcome.html", "base.html", "dashboard.html",
 ERROR_PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ app_name }} - error</title>
+<meta name="robots" content="noindex, nofollow">
+<title>{{ app_name }}</title>
 <style>
- body{margin:0;background:#f4f6fb;color:#0f172a;
-      font:15px/1.55 "Segoe UI",Inter,system-ui,Arial,sans-serif}
- .wrap{max-width:860px;margin:34px auto;padding:0 18px}
- .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px 22px;margin-bottom:16px}
- h1{font-size:20px;margin:0 0 4px}
- .muted{color:#64748b;font-size:13px}
- .err{background:#fee2e2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;
-      padding:12px 14px;margin:14px 0;font-family:ui-monospace,Consolas,monospace;font-size:13px}
- ul{margin:8px 0 0;padding-left:18px}
- li{margin:3px 0;font-size:14px}
- .ok{color:#059669}.bad{color:#dc2626;font-weight:600}
- pre{background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow:auto;
-     font-size:12px;line-height:1.45}
- code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:13px}
-</style></head><body><div class="wrap">
-<div class="card">
-  <h1>The app is running, but this page could not be built</h1>
-  <p class="muted">{{ school }} &middot; this page is shown instead of a blank
-     &ldquo;Internal Server Error&rdquo; so the cause is visible.</p>
-  <div class="err">{{ error }}</div>
-  <h2 style="font-size:15px;margin:16px 0 4px">Environment check</h2>
-  <ul>{% for label, ok, detail in checks %}
-    <li><span class="{{ 'ok' if ok else 'bad' }}">{{ 'OK' if ok else 'PROBLEM' }}</span>
-        &nbsp;{{ label }}{% if detail %} &mdash; <span class="muted">{{ detail }}</span>{% endif %}</li>
-  {% endfor %}</ul>
-</div>
-{% if tb %}<div class="card"><h2 style="font-size:15px;margin:0 0 8px">Traceback</h2>
-<pre>{{ tb }}</pre></div>{% endif %}
-<p class="muted">Open <code>/healthz</code> for the same information as JSON.</p>
+ :root{--ink:#1b2a5e;--muted:#6f6a86;--line:#e6e1d4}
+ *{box-sizing:border-box}
+ body{margin:0;min-height:100vh;display:grid;place-items:center;
+      background:#f4f1ea;color:#22203a;
+      font:15px/1.6 "Segoe UI",Inter,system-ui,Arial,sans-serif}
+ .box{max-width:520px;padding:36px 34px;background:#fff;border:1px solid var(--line);
+      border-radius:20px;box-shadow:0 14px 34px rgba(27,42,94,.10);text-align:center}
+ .mark{width:56px;height:56px;border-radius:50%;margin:0 auto 16px;
+       display:grid;place-items:center;background:#fdf3e3;color:#e07a2f;
+       font-size:26px;font-weight:700}
+ h1{font-size:21px;margin:0 0 8px;color:var(--ink)}
+ p{margin:0 0 6px;color:var(--muted);font-size:14px}
+ .ref{margin-top:16px;font-size:12px;color:#9a97a8}
+ .btn{display:inline-block;margin-top:20px;padding:10px 22px;border-radius:12px;
+      background:#e07a2f;color:#fff;text-decoration:none;font-weight:600;font-size:14px}
+ .btn:hover{background:#c96a24}
+</style></head><body>
+<div class="box">
+  <div class="mark">!</div>
+  <h1>Something went wrong</h1>
+  <p>This page could not be loaded. The problem has been recorded and the
+     school office can look into it.</p>
+  <p>Please try again in a moment.</p>
+  <a class="btn" href="{{ home }}">Go back</a>
+  <div class="ref">Reference: {{ ref }}</div>
 </div></body></html>"""
 
 
@@ -4931,9 +4931,23 @@ def handle_error(exc):
         app.logger.error("Unhandled error: %s\n%s", exc, tb)
     except Exception:                   # noqa: BLE001
         pass
-    return render_template_string(
-        ERROR_PAGE, error=f"{type(exc).__name__}: {exc}",
-        school=SCHOOL_NAME, checks=diagnostics(), tb=tb), 500
+    ref = secrets.token_hex(4).upper()
+    app.logger.error("error %s: %s", ref, exc)
+    try:
+        home = url_for("dashboard") if getattr(g, "user", None) else url_for("login")
+    except Exception:                        # noqa: BLE001
+        home = "/"
+    return render_template_string(ERROR_PAGE, ref=ref, home=home), 500
+
+
+@app.errorhandler(404)
+def not_found(_exc):
+    """A clean page instead of the browser's default."""
+    try:
+        home = url_for("dashboard") if getattr(g, "user", None) else url_for("login")
+    except Exception:                        # noqa: BLE001
+        home = "/"
+    return render_template_string(ERROR_PAGE, ref="PAGE-NOT-FOUND", home=home), 404
 
 
 @app.route("/robots.txt")
