@@ -39,6 +39,7 @@ import os
 import secrets
 import sqlite3
 import traceback
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
@@ -57,9 +58,25 @@ ADMIN_PASSWORD = (os.environ.get("ADMIN_PASSWORD", "").strip()
                   or os.environ.get("APP_PASSWORD", "").strip())
 SCHOOL_NAME = os.environ.get("SCHOOL_NAME", "Euphoric World School").strip() or "Euphoric World School"
 AI_API_KEY = os.environ.get("AI_API_KEY", "").strip()
-AI_API_URL = os.environ.get("AI_API_URL",
-                            "https://api.openai.com/v1/chat/completions").strip()
-AI_MODEL = os.environ.get("AI_MODEL", "gpt-4o-mini").strip()
+AI_PROVIDER = os.environ.get("AI_PROVIDER", "").strip().lower()
+if not AI_PROVIDER:
+    if AI_API_KEY.startswith("sk-"):
+        AI_PROVIDER = "openai"          # OpenAI style key
+    elif AI_API_KEY:
+        AI_PROVIDER = "gemini"          # Google AI Studio (AIza… / AQ.…)
+    else:
+        AI_PROVIDER = "openai"
+
+AI_DEFAULTS = {
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+               "gemini-2.0-flash"),
+    "sarvam": ("https://api.sarvam.ai/v1/chat/completions", "sarvam-m"),
+    "openai": ("https://api.openai.com/v1/chat/completions", "gpt-4o-mini"),
+}
+_default_url, _default_model = AI_DEFAULTS.get(AI_PROVIDER,
+                                               AI_DEFAULTS["openai"])
+AI_API_URL = os.environ.get("AI_API_URL", _default_url).strip()
+AI_MODEL = os.environ.get("AI_MODEL", _default_model).strip()
 APP_NAME = os.environ.get("APP_NAME", "Euphoric World ERP").strip() or "Euphoric World ERP"
 
 # Optional cloud database. Set TURSO_URL (and TURSO_TOKEN) and the data is
@@ -150,7 +167,7 @@ TEMPLATES = {
     'teacher_dashboard.html':
         '{% extends "base.html" %}\n{% block title %}Dashboard\n{% if is_admin or current_user.class_name %}\n<section class="card">\n  <div class="card-head">\n    <h2>Leave requests</h2>\n    <a class="btn ghost small" href="{{ url_for(\'leave\') }}">Open</a>\n  </div>\n  {% if pending_leave %}\n    <p><strong>{{ pending_leave }}</strong> application(s) waiting for your approval.</p>\n  {% else %}\n    <p class="muted">No pending leave applications.</p>\n  {% endif %}\n</section>\n{% endif %}\n\n{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>Good day{% if current_user.full_name %}, {{ current_user.full_name.split()[0] }}{% endif %}</h1>\n    <p>{{ today_name }}{% if cls %} · class teacher of {{ cls }}{% if sec %} – {{ sec }}{% endif %}{% else %} · no class assigned yet{% endif %}</p></div>\n</header>\n\n<div class="tiles">\n  <div class="tile"><i class="bar indigo"></i><b>{{ stats.students }}</b><span>Students in my class</span></div>\n  <div class="tile"><i class="bar green"></i><b>{{ stats.attendance }}%</b><span>Attendance today</span></div>\n  <div class="tile"><i class="bar amber"></i><b>{{ absent_today|length }}</b><span>Absent today</span></div>\n  <div class="tile"><i class="bar sky"></i><b>{{ stats.homework }}</b><span>Homework posted</span></div>\n</div>\n\n<div class="two-col">\n  <section class="card">\n    <div class="card-head"><h2>Absent today</h2>\n      <a class="btn ghost small" href="{{ url_for(\'attendance\') }}">Mark attendance</a></div>\n    {% for a in absent_today %}\n      <div class="row-line"><strong>{{ a.name }}</strong>\n        <span class="muted">roll {{ a.roll_no }}</span>\n        <span class="bad-text">{{ a.status }}</span>\n        <span class="muted">{{ a.remarks or \'\' }}</span></div>\n    {% else %}<p class="muted">Nobody absent — or attendance not marked yet.</p>{% endfor %}\n  </section>\n\n  <section class="card">\n    <div class="card-head"><h2>{% if periods %}My periods today{% else %}My class{% endif %}</h2>\n      <a class="btn ghost small" href="{{ url_for(\'timetable\') }}">Timetable</a></div>\n    {% if periods %}\n      {% for p in periods %}\n        <div class="row-line"><strong>P{{ p.period }}</strong>\n          <span>{{ p.subject_name or p.subject_code or \'—\' }}</span>\n          <span class="muted">{{ p.teacher or \'\' }}</span></div>\n      {% endfor %}\n    {% else %}\n      {% for s in students %}\n        <div class="row-line"><strong>{{ s.roll_no }}</strong><span>{{ s.name }}</span>\n          <span class="muted">{{ s.phone or \'\' }}</span></div>\n      {% else %}<p class="muted">No students in your class yet.</p>{% endfor %}\n    {% endif %}\n  </section>\n</div>\n\n<div class="two-col">\n  <section class="card">\n    <div class="card-head"><h2>Homework I posted</h2>\n      <a class="btn ghost small" href="{{ url_for(\'homework\') }}">All</a></div>\n    {% for h in homework %}\n      <div class="row-line"><strong>{{ h.subject_name or \'General\' }}</strong>\n        <span>{{ h.title }}</span>\n        <span class="muted">due {{ disp_date(h.due_date) or \'—\' }}</span></div>\n    {% else %}<p class="muted">You have not posted homework yet.</p>{% endfor %}\n  </section>\n\n  <section class="card">\n    <div class="card-head"><h2>Papers coming up</h2>\n      <a class="btn ghost small" href="{{ url_for(\'schedule\') }}">Schedule</a></div>\n    {% for p in papers %}\n      <div class="row-line"><strong>{{ disp_date(p.exam_date) }}</strong>\n        <span>{{ p.subject_name or \'—\' }}</span>\n        <span class="muted">{{ p.exam_type }}{% if p.class_name %} · class {{ p.class_name }}{% endif %}</span></div>\n    {% else %}<p class="muted">No papers scheduled.</p>{% endfor %}\n  </section>\n</div>\n\n<div class="two-col">\n  <section class="card">\n    <div class="card-head"><h2>Quick actions</h2></div>\n    <div class="quick">\n      <a class="btn ghost" href="{{ url_for(\'attendance\') }}">Attendance</a>\n      <a class="btn ghost" href="{{ url_for(\'marks\') }}">Marks entry</a>\n      <a class="btn ghost" href="{{ url_for(\'results\') }}">Results</a>\n      <a class="btn ghost" href="{{ url_for(\'homework\') }}">Homework</a>\n      <a class="btn ghost" href="{{ url_for(\'circulars\') }}">Circular</a>\n    </div>\n  </section>\n\n  <section class="card">\n    <div class="card-head"><h2>Notices</h2>\n      <a class="btn ghost small" href="{{ url_for(\'circulars\') }}">All</a></div>\n    {% for n in notices %}\n      <div class="row-line"><strong>{{ n.title }}</strong>\n        <span class="muted">{{ n.posted_on[:10] }}</span></div>\n    {% else %}<p class="muted">No notices.</p>{% endfor %}\n  </section>\n</div>\n<div class="two-col">\n  <section class="card">\n    <div class="card-head"><h2>Attendance — last 7 days</h2></div>\n    <div class="days">\n      {% for t in trend %}\n        <span class="day {{ \'ok\' if t.pct >= 75 else (\'warn\' if t.pct >= 50 else \'bad\') }}"\n              title="{{ t.day }} · {{ t.pct }}%">{{ t.day }}</span>\n      {% endfor %}\n    </div>\n    <div class="charts">\n      {% for t in trend %}\n        <div class="chart">\n          <div class="chart-bar"><span style="width: {{ t.pct }}%; background: linear-gradient(90deg,#e07a2f,#1b2a5e)"></span></div>\n          <div class="chart-label">Day {{ t.day }} · {{ t.pct }}%{% if not t.marked %} (not marked){% endif %}</div>\n        </div>\n      {% endfor %}\n    </div>\n  </section>\n\n  <section class="card">\n    <div class="card-head"><h2>Top of the class</h2>\n      <a class="btn ghost small" href="{{ url_for(\'results\') }}">Results</a></div>\n    {% for r in top %}\n      <div class="row-line"><strong>{{ loop.index }}. {{ r.name }}</strong>\n        <span>{{ \'%.2f\'|format(r.percentage) }}%</span>\n        <span class="muted">{{ r.grade }} · roll {{ r.roll_no }}</span></div>\n    {% else %}<p class="muted">No result published for your class yet.</p>{% endfor %}\n    {% if overdue_books %}<p class="muted">{{ overdue_books }} library book(s) overdue in school.</p>{% endif %}\n  </section>\n</div>\n\n<section class="card">\n  <div class="card-head"><h2>Fee dues in my class</h2>\n    <a class="btn ghost small" href="{{ url_for(\'fees\') }}">Fees</a></div>\n  {% for d in class_due %}\n    <div class="row-line"><strong>{{ d.student.name }}</strong>\n      <span class="muted">roll {{ d.student.roll_no }}</span>\n      <span class="bad-text">{{ fmt_num(d.due) }}</span></div>\n  {% else %}<p class="muted">No pending dues in your class.</p>{% endfor %}\n</section>\n{% endblock %}\n',
     'settings.html':
-        '{% extends "base.html" %}\n{% block title %}Settings{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>School settings</h1><p>Naam aur logo — ye report card, certificates aur receipts par aate hain</p></div>\n</header>\n\n<section class="card">\n  <h2 class="card-title">Names</h2>\n  <form class="form-grid" method="post">\n    <input type="hidden" name="action" value="name">\n    <label class="wide">School name <input name="school_name" value="{{ name }}" required></label>\n    <label class="wide">App name <input name="app_name" value="{{ app_name }}"\n           placeholder="School ERP" maxlength="30"></label>\n    <div class="form-actions"><button class="btn primary" type="submit">Save names</button></div>\n  </form>\n  <p class="muted">Current name: <strong>{{ school_name }}</strong></p>\n</section>\n\n<section class="card">\n  <h2 class="card-title">Principal\'s signature</h2>\n  {% if principal %}\n    <p><img src="{{ principal }}" alt="principal signature" style="height:70px;background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:10px;padding:8px"></p>\n    <form method="post" style="margin-bottom:12px">\n      <input type="hidden" name="action" value="clear_principal">\n      <button class="btn ghost small" type="submit">Remove signature</button>\n    </form>\n  {% else %}\n    <p class="muted">No signature - the report card will show a blank space.</p>\n  {% endif %}\n  <form method="post" enctype="multipart/form-data" class="photo-form">\n    <input type="hidden" name="action" value="principal_sign">\n    <label>Upload signature <input type="file" name="signature" accept="image/*" required></label>\n    <button class="btn primary small" type="submit">Upload</button>\n  </form>\n</section>\n\n<section class="card">\n  <h2 class="card-title">School logo</h2>\n  {% if logo %}\n    <p><img src="{{ logo }}" alt="logo" style="height:80px;border:1px solid var(--line,#e2e8f0);border-radius:10px;padding:6px;background:#fff"></p>\n    <form method="post" style="margin-bottom:12px">\n      <input type="hidden" name="action" value="clear_logo">\n      <button class="btn ghost small" type="submit">Remove logo</button>\n    </form>\n  {% else %}\n    <p class="muted">No logo - the app icon is being used on the report card.</p>\n  {% endif %}\n  <form method="post" enctype="multipart/form-data" class="photo-form">\n    <input type="hidden" name="action" value="logo">\n    <label>Upload logo <input type="file" name="logo" accept="image/*" required></label>\n    <button class="btn primary small" type="submit">Upload</button>\n  </form>\n  <p class="muted">PNG or JPG under 1 MB. It appears in the report card header and as a light watermark behind it.</p>\n</section>\n{% endblock %}\n',
+        '{% extends "base.html" %}\n{% block title %}Settings{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>School settings</h1><p>Naam aur logo — ye report card, certificates aur receipts par aate hain</p></div>\n</header>\n\n<section class="card">\n  <h2 class="card-title">AI helper (student doubts)</h2>\n  <p class="muted">\n    {% if ai_ready %}\n      Switched on — {{ ai_provider }} · {{ ai_model }}\n    {% else %}\n      Not switched on. Add <code>AI_API_KEY</code> in the server environment\n      (Google AI Studio key works, or any OpenAI-compatible key).\n    {% endif %}\n  </p>\n  <div class="actions">\n    <a class="btn ghost" href="{{ url_for(\'ai_test\') }}">Test AI</a>\n  </div>\n</section>\n\n<section class="card">\n  <h2 class="card-title">Names</h2>\n  <form class="form-grid" method="post">\n    <input type="hidden" name="action" value="name">\n    <label class="wide">School name <input name="school_name" value="{{ name }}" required></label>\n    <label class="wide">App name <input name="app_name" value="{{ app_name }}"\n           placeholder="School ERP" maxlength="30"></label>\n    <div class="form-actions"><button class="btn primary" type="submit">Save names</button></div>\n  </form>\n  <p class="muted">Current name: <strong>{{ school_name }}</strong></p>\n</section>\n\n<section class="card">\n  <h2 class="card-title">Principal\'s signature</h2>\n  {% if principal %}\n    <p><img src="{{ principal }}" alt="principal signature" style="height:70px;background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:10px;padding:8px"></p>\n    <form method="post" style="margin-bottom:12px">\n      <input type="hidden" name="action" value="clear_principal">\n      <button class="btn ghost small" type="submit">Remove signature</button>\n    </form>\n  {% else %}\n    <p class="muted">No signature - the report card will show a blank space.</p>\n  {% endif %}\n  <form method="post" enctype="multipart/form-data" class="photo-form">\n    <input type="hidden" name="action" value="principal_sign">\n    <label>Upload signature <input type="file" name="signature" accept="image/*" required></label>\n    <button class="btn primary small" type="submit">Upload</button>\n  </form>\n</section>\n\n<section class="card">\n  <h2 class="card-title">School logo</h2>\n  {% if logo %}\n    <p><img src="{{ logo }}" alt="logo" style="height:80px;border:1px solid var(--line,#e2e8f0);border-radius:10px;padding:6px;background:#fff"></p>\n    <form method="post" style="margin-bottom:12px">\n      <input type="hidden" name="action" value="clear_logo">\n      <button class="btn ghost small" type="submit">Remove logo</button>\n    </form>\n  {% else %}\n    <p class="muted">No logo - the app icon is being used on the report card.</p>\n  {% endif %}\n  <form method="post" enctype="multipart/form-data" class="photo-form">\n    <input type="hidden" name="action" value="logo">\n    <label>Upload logo <input type="file" name="logo" accept="image/*" required></label>\n    <button class="btn primary small" type="submit">Upload</button>\n  </form>\n  <p class="muted">PNG or JPG under 1 MB. It appears in the report card header and as a light watermark behind it.</p>\n</section>\n{% endblock %}\n',
     'my_signature.html':
         '{% extends "base.html" %}\n{% block title %}My signature{% endblock %}\n{% block content %}\n<header class="page-head">\n  <div><h1>My signature</h1><p>This signature appears on the report cards of your class</p></div>\n</header>\n\n<section class="card">\n  <h2 class="card-title">Class teacher\'s signature</h2>\n  {% if signature %}\n    <p><img src="{{ signature }}" alt="signature" style="height:70px;background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:10px;padding:8px"></p>\n    <form method="post" style="margin-bottom:12px">\n      <input type="hidden" name="action" value="clear">\n      <button class="btn ghost small" type="submit">Remove signature</button>\n    </form>\n  {% else %}\n    <p class="muted">No signature yet - the report card will show a blank space.</p>\n  {% endif %}\n  <form method="post" enctype="multipart/form-data" class="photo-form">\n    <label>Upload signature <input type="file" name="signature" accept="image/*" required></label>\n    <button class="btn primary small" type="submit">Upload</button>\n  </form>\n</section>\n\n{% if is_admin %}\n<section class="card">\n  <h2 class="card-title">Principal\'s signature</h2>\n  {% if principal %}\n    <p><img src="{{ principal }}" alt="principal signature" style="height:70px;background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:10px;padding:8px"></p>\n  {% else %}\n  {% endif %}\n  <p class="muted"><a class="btn ghost small" href="{{ url_for(\'settings\') }}">Open Settings</a></p>\n</section>\n{% endif %}\n{% endblock %}\n',
     'my_leave.html':
@@ -1277,6 +1294,13 @@ def ai_ask(question, subject="", cls=""):
         if not text:
             return None, "The AI helper did not return an answer. Try again."
         return text, None
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode()[:200]
+        except Exception:                    # noqa: BLE001
+            pass
+        return None, f"AI service said {exc.code}. {detail}"
     except Exception as exc:                 # noqa: BLE001
         return None, f"AI helper could not be reached ({type(exc).__name__})."
 
@@ -3992,7 +4016,9 @@ def settings():
                            principal=setting("principal_sign", ""),
                            logo=setting("school_logo", ""),
                            name=setting("school_name", SCHOOL_NAME),
-                           school_name=SCHOOL_NAME)
+                           school_name=SCHOOL_NAME,
+                           ai_ready=bool(AI_API_KEY),
+                           ai_provider=AI_PROVIDER, ai_model=AI_MODEL)
 
 
 
@@ -4247,6 +4273,23 @@ def id_cards():
     return render_template("id_cards.html", rows=rows, cls=cls, sec=sec,
                            classes=classes, school=setting("school_name", SCHOOL_NAME),
                            logo=school_logo())
+
+
+@app.route("/ai-test")
+def ai_test():
+    """Admin: check whether the AI key actually works."""
+    if not is_admin():
+        flash("Only an admin can test the AI helper.", "error")
+        return redirect(url_for("dashboard"))
+    if not AI_API_KEY:
+        flash("No AI_API_KEY is set in the server environment.", "error")
+        return redirect(url_for("settings"))
+    text, err = ai_ask("Say hello in one short sentence.", "general", "8")
+    if err:
+        flash(f"AI test failed: {err}", "error")
+    else:
+        flash(f"AI works ({AI_PROVIDER} · {AI_MODEL}): {text[:120]}", "ok")
+    return redirect(url_for("settings"))
 
 
 @app.route("/audit")
