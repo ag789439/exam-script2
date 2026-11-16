@@ -5369,13 +5369,16 @@ def diagnostics():
     checks.append(("database writable", db_ok, db_detail))
 
     try:
-        with sqlite3.connect(DB_PATH) as probe:
-            admins = probe.execute(
-                "SELECT COUNT(*) FROM users WHERE role='admin' AND active=1"
-            ).fetchone()[0]
+        row = query("SELECT COUNT(*) c FROM users WHERE role='admin' AND active=1",
+                    one=True)
+        admins = row["c"] if row else 0
+        total = query("SELECT COUNT(*) c FROM users", one=True)["c"]
+        students = query("SELECT COUNT(*) c FROM students", one=True)["c"]
         checks.append(("admin account", admins > 0,
                        f"{admins} active admin(s)" if admins else
                        "no active admin - nobody can log in"))
+        checks.append(("accounts and students", True,
+                       f"{total} login(s), {students} student record(s)"))
     except Exception as exc:            # noqa: BLE001
         checks.append(("admin account", False, str(exc)))
     return checks
