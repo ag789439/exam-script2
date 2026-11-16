@@ -868,9 +868,21 @@ class CloudDB:
         return _HTTPCursor(self._call(sql, params))
 
     def executescript(self, script):
+        """Run the schema statement by statement - one bad line must not
+        stop the rest of the tables from being created."""
+        failed = 0
         for statement in script.split(";"):
-            if statement.strip():
-                self._call(statement)
+            text = statement.strip()
+            if not text:
+                continue
+            try:
+                self._call(text)
+            except Exception as exc:         # noqa: BLE001
+                failed += 1
+                print(f"[exam-manager] schema step skipped: {str(exc)[:160]}",
+                      flush=True)
+        if failed:
+            print(f"[exam-manager] {failed} schema step(s) skipped", flush=True)
 
     def commit(self):
         return None
@@ -1095,6 +1107,7 @@ def query_many(statements):
 
 
 def execute(sql, params=()):
+    clear_page_cache()
     db = get_db()
     cur = db.execute(sql, params)
     db.commit()
@@ -1205,8 +1218,76 @@ def csrf_guard():
     return "Blocked: form came from another site", 403
 
 
+
+# --------------------------------------------------------------------------
+#  page cache - a page opened twice in a minute comes straight from memory
+# --------------------------------------------------------------------------
+_PAGE_HTML = {}
+_PAGE_TTL = 60
+_NO_CACHE = ("report_card", "results_print", "results_csv", "backup", "healthz",
+             "static", "manifest", "robots", "sitemap", "receipt", "certificate_print",
+             "login", "logout", "forgot", "forgot_verify", "id_cards", "students_csv")
+
+
+def serve_from_page_cache():
+    if request.method != "GET":
+        return None
+    if not getattr(g, "user", None):
+        return None
+    if request.endpoint in _NO_CACHE or session.get("_flashes"):
+        return None
+    key = (g.user["id"], request.full_path)
+    hit = _PAGE_HTML.get(key)
+    if hit and (datetime.now().timestamp() - hit[0]) < _PAGE_TTL:
+        return Response(hit[1], mimetype="text/html")
+    return None
+
+
+@app.after_request
+def store_page_cache(resp):
+    try:
+        if (request.method == "GET" and resp.status_code == 200
+                and resp.mimetype == "text/html"
+                and getattr(g, "user", None)
+                and request.endpoint not in _NO_CACHE
+                and not session.get("_flashes")
+                and not resp.headers.get("Content-Disposition")):
+            body = resp.get_data()
+            if len(body) < 400000:
+                key = (g.user["id"], request.full_path)
+                _PAGE_HTML[key] = (datetime.now().timestamp(), body)
+                if len(_PAGE_HTML) > 400:
+                    _PAGE_HTML.clear()
+    except Exception:                        # noqa: BLE001
+        pass
+    return resp
+
+
+_DB_READY = {"ok": False}
+
+
+def ensure_schema():
+    """Create the tables if the database is empty (fresh Turso database)."""
+    if _DB_READY["ok"]:
+        return
+    try:
+        query("SELECT 1 FROM users LIMIT 1")
+        _DB_READY["ok"] = True
+        return
+    except Exception:                        # noqa: BLE001
+        pass
+    try:
+        init_db(verbose=True)
+        query("SELECT 1 FROM users LIMIT 1")
+        _DB_READY["ok"] = True
+        print("[exam-manager] schema created on first request", flush=True)
+    except Exception as exc:                 # noqa: BLE001
+        print(f"[exam-manager] schema bootstrap failed: {exc}", flush=True)
+
+
 @app.before_request
 def load_user():
+    ensure_schema()
     ensure_secret_key()
     """Everyone must be logged in; the session holds the user id."""
     g.user = None
@@ -1240,7 +1321,7 @@ def load_user():
                                              "call_teacher")):
             flash("A student account can only view results.", "error")
             return redirect(url_for("my_result"))
-    return None
+    return serve_from_page_cache()
 
 
 def uid():
@@ -1390,6 +1471,14 @@ def ai_ask(question, subject="", cls=""):
         return None, f"AI service said {exc.code}. {detail}"
     except Exception as exc:                 # noqa: BLE001
         return None, f"AI helper could not be reached ({type(exc).__name__}: {str(exc)[:120]})."
+
+
+def clear_page_cache():
+    """After a write, forget cached pages so the change shows at once."""
+    try:
+        _PAGE_HTML.clear()
+    except Exception:                        # noqa: BLE001
+        pass
 
 
 def audit(action, detail=""):
